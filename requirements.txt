@@ -1,0 +1,4 @@
+faster-whisper>=1.2.1
+SpeechRecognition>=3.16.1
+numpy>=2.0.0
+PyAudio>=0.2.13
