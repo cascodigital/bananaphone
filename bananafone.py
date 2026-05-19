@@ -6,6 +6,13 @@ import threading
 import time
 import tkinter as tk
 import traceback
+import audioop
+import json
+import urllib.error
+import urllib.request
+import uuid
+import wave
+from io import BytesIO
 
 import numpy as np
 import speech_recognition as sr
@@ -16,6 +23,18 @@ CPU_THREADS = min(os.cpu_count() or 4, 8)
 LOG_DIR = os.path.expanduser("~/.local/state/bananafone")
 LOG_FILE = os.path.join(LOG_DIR, "bananafone.log")
 HF_CACHE_DIR = os.path.expanduser("~/.cache/huggingface/hub")
+DEFAULT_OPENAI_MODEL = os.environ.get("BANANAFONE_OPENAI_MODEL", "gpt-4o-mini-transcribe")
+OPENAI_TRANSCRIPT_URL = os.environ.get(
+    "BANANAFONE_OPENAI_TRANSCRIPT_URL",
+    "https://api.openai.com/v1/audio/transcriptions",
+)
+OPENAI_KEY_FILE = os.environ.get(
+    "BANANAFONE_OPENAI_KEY_FILE",
+    "/home/aristofeles/ai/config/ai-keys.md",
+)
+AUTO_STOP_SILENCE_SECONDS = float(os.environ.get("BANANAFONE_AUTO_STOP_SILENCE_SECONDS", "4.0"))
+MIN_SPEECH_SECONDS = float(os.environ.get("BANANAFONE_MIN_SPEECH_SECONDS", "0.35"))
+SILENCE_RMS_MULTIPLIER = float(os.environ.get("BANANAFONE_SILENCE_RMS_MULTIPLIER", "1.35"))
 
 MODES = {
     "fast": {
@@ -55,22 +74,14 @@ MODES = {
         },
     },
     "slow": {
-        "label": "Lento",
+        "label": "API",
         "button_color": "#2563EB",
         "text_color": "white",
-        "status": "Mais preciso para horario, numeros e frases chatas.",
-        "model_name": "medium",
+        "status": "Mais preciso via nuvem para horario, numeros e frases chatas.",
+        "backend": "openai",
+        "api_model": DEFAULT_OPENAI_MODEL,
         "ambient_duration": 0.75,
-        "chunk_seconds": 0.75,
-        "transcribe_kwargs": {
-            "language": "pt",
-            "beam_size": 5,
-            "best_of": 5,
-            "temperature": 0.0,
-            "condition_on_previous_text": True,
-            "vad_filter": True,
-            "without_timestamps": True,
-        },
+        "prompt": "Transcreva em pt-BR com foco em fidelidade de numeros, horarios, nomes e termos tecnicos.",
     },
 }
 
@@ -88,7 +99,7 @@ class DictationApp:
         self.root.configure(bg="#111827")
         self.root.eval("tk::PlaceWindow . center")
 
-        self.mode_key = "normal"
+        self.mode_key = "slow"
         self.mode = MODES[self.mode_key]
         self.model = None
         self.model_key_loaded = None
@@ -97,17 +108,22 @@ class DictationApp:
         self.recognizer.dynamic_energy_threshold = True
         self.source = None
         self.audio_chunks = []
-        self.stop_listening_func = None
         self.is_recording = False
+        self.stop_requested = False
+        self.recording_thread = None
         self.ctrl_pressed = False
         self.shift_pressed = False
+        self.hotkey_recording = False
         self.transcription_thread = None
         self.refreshing_models = False
+        self.energy_floor = 0
+        self.capture_sample_rate = 16000
+        self.capture_sample_width = 2
 
         self.build_ui()
         self.setup_bindings()
         self.refresh_cache_status()
-        self.select_mode("normal")
+        self.select_mode("slow")
 
     def build_ui(self):
         self.title_label = tk.Label(
@@ -121,7 +137,7 @@ class DictationApp:
 
         self.status_label = tk.Label(
             self.root,
-            text="Carregando modo normal...",
+            text="Carregando modo API...",
             font=("Helvetica", 12),
             fg="#D1D5DB",
             bg="#111827",
@@ -171,7 +187,7 @@ class DictationApp:
 
         self.mode_label = tk.Label(
             self.root,
-            text="Segure o botao abaixo ou use Ctrl+Shift com a janela focada.",
+            text="Clique para falar. Para sozinho apos silencio. Ctrl+Shift continua no modo segurar.",
             font=("Helvetica", 10),
             fg="#9CA3AF",
             bg="#111827",
@@ -181,7 +197,7 @@ class DictationApp:
 
         self.hold_button = tk.Button(
             self.root,
-            text="SEGURE PARA FALAR\nCtrl+Shift com foco",
+            text="PRESSIONE PARA FALAR\nPara sozinho no silencio",
             font=("Helvetica", 15, "bold"),
             width=24,
             height=3,
@@ -189,10 +205,9 @@ class DictationApp:
             fg="#F9FAFB",
             relief=tk.RAISED,
             justify=tk.CENTER,
+            command=self.on_main_button_click,
         )
         self.hold_button.pack(pady=(0, 12))
-        self.hold_button.bind("<ButtonPress-1>", self.on_hold_press)
-        self.hold_button.bind("<ButtonRelease-1>", self.on_hold_release)
 
         self.result_text = tk.Text(
             self.root,
@@ -231,7 +246,7 @@ class DictationApp:
 
     def set_hold_button_idle(self):
         self.hold_button.config(
-            text="SEGURE PARA FALAR\nCtrl+Shift com foco",
+            text="PRESSIONE PARA FALAR\nPara sozinho no silencio",
             bg="#374151",
             activebackground="#4B5563",
             state=tk.NORMAL if not self.model_loading else tk.DISABLED,
@@ -239,7 +254,7 @@ class DictationApp:
 
     def set_hold_button_recording(self):
         self.hold_button.config(
-            text="FALANDO...\nSOLTE PARA TRANSCREVER",
+            text="FALANDO...\nCLIQUE PARA PARAR",
             bg="#DC2626",
             activebackground="#EF4444",
             state=tk.NORMAL,
@@ -278,19 +293,25 @@ class DictationApp:
         try:
             mode = MODES[mode_key]
             started = time.time()
-            model = WhisperModel(
-                mode["model_name"],
-                device="cpu",
-                compute_type="int8",
-                cpu_threads=CPU_THREADS,
-                num_workers=1,
-            )
             source = sr.Microphone()
             with source as mic_source:
                 self.root.after(0, self.update_status, "Calibrando ruido ambiente...", "#FBBF24")
                 self.recognizer.adjust_for_ambient_noise(
                     mic_source,
                     duration=mode["ambient_duration"],
+                )
+                self.energy_floor = self.recognizer.energy_threshold
+
+            if mode.get("backend") == "openai":
+                self.require_openai_key()
+                model = {"backend": "openai", "api_model": mode["api_model"]}
+            else:
+                model = WhisperModel(
+                    mode["model_name"],
+                    device="cpu",
+                    compute_type="int8",
+                    cpu_threads=CPU_THREADS,
+                    num_workers=1,
                 )
 
             self.model = model
@@ -316,11 +337,11 @@ class DictationApp:
         self.hold_button.config(text="ERRO AO CARREGAR\nverifique o log", bg="#7F1D1D", state=tk.DISABLED)
         self.update_status(f"Erro ao carregar: {error_text}", "#F87171")
 
-    def on_hold_press(self, _event):
-        self.start_recording()
-
-    def on_hold_release(self, _event):
-        self.stop_recording()
+    def on_main_button_click(self):
+        if self.is_recording:
+            self.stop_recording()
+        else:
+            self.start_recording()
 
     def on_ctrl_press(self, _event):
         self.ctrl_pressed = True
@@ -339,11 +360,13 @@ class DictationApp:
         self.maybe_stop_hotkey_recording()
 
     def maybe_start_hotkey_recording(self):
-        if self.ctrl_pressed and self.shift_pressed:
+        if self.ctrl_pressed and self.shift_pressed and not self.hotkey_recording:
+            self.hotkey_recording = True
             self.start_recording()
 
     def maybe_stop_hotkey_recording(self):
-        if self.is_recording and not (self.ctrl_pressed and self.shift_pressed):
+        if self.hotkey_recording and not (self.ctrl_pressed and self.shift_pressed):
+            self.hotkey_recording = False
             self.stop_recording()
 
     def start_recording(self):
@@ -352,59 +375,84 @@ class DictationApp:
 
         self.audio_chunks = []
         self.is_recording = True
+        self.stop_requested = False
         self.set_mode_button_states()
         self.set_hold_button_recording()
-        self.update_status(f"Gravando em {self.mode['label']}. Solte para transcrever.", "#34D399")
-        self.stop_listening_func = self.recognizer.listen_in_background(
-            self.source,
-            self.audio_callback,
-            phrase_time_limit=self.mode["chunk_seconds"],
+        self.update_status(
+            f"Gravando em {self.mode['label']}. Para sozinho apos {AUTO_STOP_SILENCE_SECONDS:.0f}s de silencio.",
+            "#34D399",
         )
+        self.recording_thread = threading.Thread(target=self.capture_audio_loop, daemon=True)
+        self.recording_thread.start()
 
     def stop_recording(self):
         if not self.is_recording:
             return
 
         self.is_recording = False
-        if self.stop_listening_func:
-            self.stop_listening_func(wait_for_stop=True)
-            self.stop_listening_func = None
+        self.stop_requested = True
+        self.hotkey_recording = False
 
         self.hold_button.config(text="TRANSCREVENDO...", bg="#1D4ED8", state=tk.DISABLED)
         self.update_status(f"Transcrevendo com modo {self.mode['label']}...", "#60A5FA")
         self.transcription_thread = threading.Thread(target=self.process_audio, daemon=True)
         self.transcription_thread.start()
 
-    def audio_callback(self, recognizer, audio):
-        del recognizer
-        if self.is_recording:
-            self.audio_chunks.append(audio.get_raw_data())
+    def capture_audio_loop(self):
+        try:
+            with self.source as mic_source:
+                sample_rate = mic_source.SAMPLE_RATE
+                sample_width = mic_source.SAMPLE_WIDTH
+                chunk_size = mic_source.CHUNK
+                self.capture_sample_rate = sample_rate
+                self.capture_sample_width = sample_width
+                silence_deadline = None
+                speech_frames = 0
+
+                while self.is_recording and not self.stop_requested:
+                    chunk = mic_source.stream.read(chunk_size)
+                    self.audio_chunks.append(chunk)
+
+                    rms = audioop.rms(chunk, sample_width)
+                    threshold = max(self.energy_floor * SILENCE_RMS_MULTIPLIER, 120)
+
+                    if rms >= threshold:
+                        speech_frames += 1
+                        silence_deadline = time.time() + AUTO_STOP_SILENCE_SECONDS
+                    elif speech_frames > 0 and silence_deadline and time.time() >= silence_deadline:
+                        self.root.after(0, self.stop_recording)
+                        return
+
+            min_chunks = max(1, int((sample_rate * MIN_SPEECH_SECONDS) / chunk_size))
+            if speech_frames < min_chunks:
+                self.audio_chunks = []
+        except Exception as exc:
+            self.root.after(0, self.handle_capture_failure, f"Erro de captura: {str(exc)[:60]}")
 
     def process_audio(self):
         if not self.audio_chunks:
             self.root.after(0, self.after_no_audio)
             return
 
-        with self.source as mic_source:
-            sample_rate = mic_source.SAMPLE_RATE
-            sample_width = mic_source.SAMPLE_WIDTH
-
-        raw_data = b"".join(self.audio_chunks)
-        audio = sr.AudioData(raw_data, sample_rate, sample_width)
-
         try:
+            raw_data = b"".join(self.audio_chunks)
+            audio = sr.AudioData(raw_data, self.capture_sample_rate, self.capture_sample_width)
             started = time.time()
             audio_data = audio.get_raw_data(convert_rate=16000, convert_width=2)
-            audio_np = np.frombuffer(audio_data, dtype=np.int16).astype(np.float32) / 32768.0
-            segments, info = self.model.transcribe(audio_np, **self.mode["transcribe_kwargs"])
-            text = " ".join(segment.text.strip() for segment in segments).strip()
+            if self.mode.get("backend") == "openai":
+                text, language_probability = self.transcribe_with_openai(audio_data)
+            else:
+                audio_np = np.frombuffer(audio_data, dtype=np.int16).astype(np.float32) / 32768.0
+                segments, info = self.model.transcribe(audio_np, **self.mode["transcribe_kwargs"])
+                text = " ".join(segment.text.strip() for segment in segments).strip()
+                language_probability = info.language_probability
             elapsed = time.time() - started
 
             if not text:
                 raise sr.UnknownValueError()
 
             self.copy_to_clipboard(text)
-            self.root.after(0, self.after_transcription_success, text, elapsed, info.language_probability)
+            self.root.after(0, self.after_transcription_success, text, elapsed, language_probability)
         except sr.UnknownValueError:
             self.root.after(0, self.after_transcription_error, "Nao entendi esse gorjeio.")
         except Exception as exc:
@@ -430,6 +478,15 @@ class DictationApp:
         self.set_hold_button_idle()
         self.update_status(error_text, "#F87171")
 
+    def handle_capture_failure(self, error_text):
+        self.is_recording = False
+        self.stop_requested = False
+        self.hotkey_recording = False
+        self.audio_chunks = []
+        self.set_mode_button_states()
+        self.set_hold_button_idle()
+        self.update_status(error_text, "#F87171")
+
     def get_model_cache_path(self, model_name):
         return os.path.join(HF_CACHE_DIR, f"models--Systran--faster-whisper-{model_name}")
 
@@ -439,7 +496,7 @@ class DictationApp:
     def refresh_cache_status(self):
         small = "ok" if self.is_model_cached("small") else "faltando"
         medium = "ok" if self.is_model_cached("medium") else "faltando"
-        self.cache_label.config(text=f"Modelos: small {small} | medium {medium}")
+        self.cache_label.config(text=f"Modelos: small {small} | medium {medium} | API nuvem ok")
 
     def refresh_models(self):
         if self.model_loading or self.is_recording or self.refreshing_models:
@@ -466,6 +523,111 @@ class DictationApp:
             self.root.after(0, self.finish_refresh_models, results)
         except Exception as exc:
             self.root.after(0, self.fail_refresh_models, str(exc))
+
+    def require_openai_key(self):
+        if self.get_openai_api_key():
+            return
+        raise RuntimeError("OPENAI_API_KEY ausente. Configure a chave da API.")
+
+    def get_openai_api_key(self):
+        env_key = os.environ.get("OPENAI_API_KEY")
+        if env_key:
+            return env_key.strip()
+
+        if not os.path.isfile(OPENAI_KEY_FILE):
+            return None
+
+        try:
+            with open(OPENAI_KEY_FILE, "r", encoding="utf-8") as handle:
+                for line in handle:
+                    if "OpenAI (Speech):" in line and "sk-" in line:
+                        return line.split("`")[1].strip()
+            with open(OPENAI_KEY_FILE, "r", encoding="utf-8") as handle:
+                for line in handle:
+                    if "OpenAI (RAG):" in line and "sk-" in line:
+                        return line.split("`")[1].strip()
+        except Exception:
+            return None
+        return None
+
+    def transcribe_with_openai(self, pcm_audio):
+        api_key = self.get_openai_api_key()
+        if not api_key:
+            raise RuntimeError("OPENAI_API_KEY ausente")
+
+        wav_buffer = BytesIO()
+        with wave.open(wav_buffer, "wb") as wav_file:
+            wav_file.setnchannels(1)
+            wav_file.setsampwidth(2)
+            wav_file.setframerate(16000)
+            wav_file.writeframes(pcm_audio)
+
+        boundary = f"bananafone-{uuid.uuid4().hex}"
+        body = self.build_multipart_body(
+            boundary,
+            fields={
+                "model": self.mode["api_model"],
+                "language": "pt",
+                "prompt": self.mode.get("prompt", ""),
+                "response_format": "json",
+                "temperature": "0",
+            },
+            files={
+                "file": ("bananafone.wav", wav_buffer.getvalue(), "audio/wav"),
+            },
+        )
+        request = urllib.request.Request(
+            OPENAI_TRANSCRIPT_URL,
+            data=body,
+            method="POST",
+            headers={
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": f"multipart/form-data; boundary={boundary}",
+            },
+        )
+
+        try:
+            with urllib.request.urlopen(request, timeout=120) as response:
+                payload = json.loads(response.read().decode("utf-8"))
+        except urllib.error.HTTPError as exc:
+            details = exc.read().decode("utf-8", errors="replace")
+            raise RuntimeError(f"OpenAI HTTP {exc.code}: {details[:180]}")
+        except urllib.error.URLError as exc:
+            raise RuntimeError(f"Falha de rede: {exc.reason}")
+
+        text = (payload.get("text") or "").strip()
+        language = payload.get("language")
+        confidence = 1.0 if language == "pt" else None
+        return text, confidence
+
+    def build_multipart_body(self, boundary, fields, files):
+        chunks = []
+        for name, value in fields.items():
+            chunks.extend(
+                [
+                    f"--{boundary}\r\n".encode("utf-8"),
+                    f'Content-Disposition: form-data; name="{name}"\r\n\r\n'.encode("utf-8"),
+                    str(value).encode("utf-8"),
+                    b"\r\n",
+                ]
+            )
+
+        for name, (filename, content, content_type) in files.items():
+            chunks.extend(
+                [
+                    f"--{boundary}\r\n".encode("utf-8"),
+                    (
+                        f'Content-Disposition: form-data; name="{name}"; '
+                        f'filename="{filename}"\r\n'
+                    ).encode("utf-8"),
+                    f"Content-Type: {content_type}\r\n\r\n".encode("utf-8"),
+                    content,
+                    b"\r\n",
+                ]
+            )
+
+        chunks.append(f"--{boundary}--\r\n".encode("utf-8"))
+        return b"".join(chunks)
 
     def finish_refresh_models(self, results):
         self.refreshing_models = False

@@ -1,6 +1,7 @@
 # Bananafone
 
-Ditado local para Linux com tres modos de transcricao e fluxo push-to-talk.
+Ditado para Linux com dois modos locais e um modo de API, pensado para ficar
+aberto na tela durante o uso diario.
 
 ## Visao geral
 
@@ -8,16 +9,17 @@ Ditado local para Linux com tres modos de transcricao e fluxo push-to-talk.
 
 - `Fast`: menor latencia para texto livre
 - `Normal`: equilibrio entre velocidade e entendimento
-- `Lento`: maior precisao para numeros, horario e frases mais chatas
+- `API`: transcricao em nuvem para maior precisao em numeros, horario e frases mais chatas
 
-O aplicativo fica aberto na tela, grava enquanto voce segura o botao principal
-e copia o resultado para a area de transferencia quando voce solta.
+O app fica residente, grava ao clicar no botao principal, para sozinho depois
+de alguns segundos de silencio e copia o texto para a area de transferencia.
 
 ## Recursos
 
-- tres modos de transcricao local com `faster-whisper`
-- botao grande de `segure para falar`
-- atalho `Ctrl+Shift` com a janela focada
+- dois modos locais com `faster-whisper` e um modo de nuvem com OpenAI
+- botao grande de clique unico para iniciar a fala
+- parada automatica por silencio
+- atalho `Ctrl+Shift` com a janela focada no esquema segurar/soltar
 - botao `Baixar / Atualizar modelos` para aquecer ou baixar cache local
 - status visual do cache dos modelos `small` e `medium`
 - log local em `~/.local/state/bananafone/bananafone.log`
@@ -43,9 +45,39 @@ e copia o resultado para a area de transferencia quando voce solta.
 - `wl-copy` ou `xclip`
 - `python3-tk`
 
+### Chave da API
+
+O modo `API` usa a API de transcricao da OpenAI. O app procura a chave nesta ordem:
+
+1. variavel de ambiente `OPENAI_API_KEY`
+2. arquivo configurado em `BANANAFONE_OPENAI_KEY_FILE`
+3. fallback local em `/home/aristofeles/ai/config/ai-keys.md`
+
+Para trocar o modelo do modo `API`, use `BANANAFONE_OPENAI_MODEL`.
+O padrao atual e `gpt-4o-mini-transcribe`.
+
 ## Instalacao
 
-Crie um ambiente virtual e instale as dependencias:
+### Jeito recomendado
+
+Clone o repo e rode o instalador:
+
+```bash
+git clone https://github.com/cascodigital/bananafone.git
+cd bananafone
+./install.sh
+```
+
+O instalador:
+
+- cria `.venv`
+- instala dependencias Python
+- cria launcher em `~/.local/share/applications/bananafone.desktop`
+- deixa o app pronto para abrir pelo menu
+
+### Instalacao manual
+
+Se preferir controlar tudo na mao:
 
 ```bash
 python3 -m venv .venv
@@ -56,28 +88,58 @@ pip install -r requirements.txt
 ## Uso rapido
 
 ```bash
-source .venv/bin/activate
-python bananafone.py
+./.venv/bin/python bananafone.py
 ```
 
 Fluxo:
 
 1. abra o app
-2. escolha `Fast`, `Normal` ou `Lento`
-3. segure o botao principal para falar
-4. solte para transcrever
-5. cole o texto onde quiser
+2. o modo padrao e `API`
+3. troque para `Fast` ou `Normal` se quiser
+4. clique no botao principal para falar
+5. espere parar sozinho no silencio ou clique novamente para encerrar
+6. cole o texto onde quiser
+
+## Atualizacao
+
+Em outra maquina, depois do clone inicial:
+
+```bash
+cd bananafone
+git pull
+./install.sh
+```
+
+## Distribuicao
+
+Voce nao precisa de `.deb` para ter um fluxo logico agora.
+
+O caminho mais simples e robusto neste momento e:
+
+- manter o codigo no GitHub
+- instalar por `git clone` + `./install.sh`
+- atualizar por `git pull` + `./install.sh`
+
+Um `.deb` so passa a valer a pena quando voce quiser:
+
+- versao fechada por tag ou release
+- desktop entry, icone e dependencias empacotados juntos
+- instalacao para usuarios que nao querem nem ver terminal
+
+Se quiser, isso pode virar um passo 2 depois. Para o estado atual do projeto,
+Git + instalador e o melhor custo-beneficio.
 
 ## Desktop
 
-O arquivo [`desktop/bananafone.desktop`](desktop/bananafone.desktop) e um exemplo
-de launcher. Ajuste o `Exec=` para o caminho real da sua instalacao.
+O arquivo [`desktop/bananafone.desktop`](desktop/bananafone.desktop) fica como
+referencia. O launcher real da maquina e gerado pelo `install.sh`.
 
 ## Estrutura
 
 ```text
-bananafone-repo/
+bananafone/
   bananafone.py
+  install.sh
   requirements.txt
   desktop/
     bananafone.desktop
@@ -93,6 +155,7 @@ python -m py_compile bananafone.py
 
 ## Observacoes
 
-Na primeira execucao de cada modo, o `faster-whisper` pode baixar o modelo e
-aquecer o cache local. O botao `Baixar / Atualizar modelos` existe justamente
-para isso.
+Na primeira execucao dos modos locais, o `faster-whisper` pode baixar o modelo
+e aquecer o cache local. O botao `Baixar / Atualizar modelos` existe justamente
+para isso. O modo `API` nao usa cache local do Whisper; ele envia o audio
+capturado para a API de transcricao configurada.
