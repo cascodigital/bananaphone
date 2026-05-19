@@ -14,6 +14,8 @@ aberto na tela durante o uso diario.
 O app fica residente, grava ao clicar no botao principal, para sozinho depois
 de alguns segundos de silencio e copia o texto para a area de transferencia.
 
+![Bananafone em modo API](docs/bananafone-api-mode.png)
+
 ## Recursos
 
 - dois modos locais com `faster-whisper` e um modo de nuvem com OpenAI
