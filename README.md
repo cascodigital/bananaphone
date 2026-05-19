@@ -56,6 +56,42 @@ O modo `API` usa a API de transcricao da OpenAI. O app procura a chave nesta ord
 Para trocar o modelo do modo `API`, use `BANANAFONE_OPENAI_MODEL`.
 O padrao atual e `gpt-4o-mini-transcribe`.
 
+### Onde colocar a chave
+
+Jeito mais simples:
+
+1. abra `/home/aristofeles/ai/config/ai-keys.md`
+2. adicione uma linha como esta:
+
+```md
+- **OpenAI (Speech):** `sua-chave-aqui`
+```
+
+Alternativas:
+
+- exportar `OPENAI_API_KEY` antes de abrir o app
+- apontar `BANANAFONE_OPENAI_KEY_FILE` para outro arquivo seu
+
+Se existir `OpenAI (Speech)` em `ai-keys.md`, o `Bananafone` usa essa entrada
+automaticamente.
+
+## Compatibilidade
+
+O `Bananafone` deve funcionar em GNOME ou KDE se a maquina tiver:
+
+- Python com `tkinter`
+- microfone funcional via PulseAudio ou PipeWire
+- `wl-copy` no Wayland ou `xclip` no X11 para clipboard
+
+Em KDE, a chance de funcionar e boa porque o app e Tkinter puro e nao depende
+de nada exclusivo do GNOME.
+
+Pontos de atencao:
+
+- no Wayland, o atalho `Ctrl+Shift` continua dependendo da janela estar focada
+- o launcher do menu depende de `~/.local/share/applications`, que e padrao no KDE tambem
+- se o clipboard falhar, normalmente e falta de `wl-copy` ou `xclip`, nao do app em si
+
 ## Instalacao
 
 ### Jeito recomendado
