@@ -1,6 +1,6 @@
 # Bananafone
 
-Versao atual do pacote: `1.1`
+Versao atual do pacote: `1.2`
 
 Ditado para Linux com dois modos locais e um modo de API, pensado para ficar
 aberto na tela durante o uso diario.
@@ -27,7 +27,10 @@ de alguns segundos de silencio e copia o texto para a area de transferencia.
 - botao `Baixar / Atualizar modelos` para aquecer ou baixar cache local
 - status visual do cache dos modelos `small` e `medium`
 - seletor de saida: `EN` por padrao, com opcoes `PT-BR` e `PT-PT`
+- botao para salvar o modo e a saida atuais como novo padrao
 - log local em `~/.local/state/bananafone/bananafone.log`
+
+No Linux, o padrao salvo fica em `~/.config/bananafone/settings.json`.
 
 ## Limitacoes
 
@@ -155,12 +158,13 @@ Fluxo:
 
 1. abra o app
 2. o modo padrao e `API`
-3. a saida padrao e `EN`
+3. a saida padrao inicial e `EN`
 4. troque para `PT-BR` ou `PT-PT` se quiser manter portugues
-5. troque para `Fast` ou `Normal` se quiser transcricao local antes da conversao
-6. clique no botao principal para falar
-7. espere parar sozinho no silencio ou clique novamente para encerrar
-8. cole o texto onde quiser
+5. troque para `Fast`, `Normal` ou `API` conforme a maquina
+6. se quiser que essa combinacao vire o novo padrao, clique em `Tornar atual o padrao`
+7. clique no botao principal para falar
+8. espere parar sozinho no silencio ou clique novamente para encerrar
+9. cole o texto onde quiser
 
 ## Atualizacao
 

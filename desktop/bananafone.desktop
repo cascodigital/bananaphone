@@ -1,5 +1,5 @@
 [Desktop Entry]
-Version=1.1
+Version=1.2
 Name=Bananafone
 Comment=Ditado local com modo rapido e preciso
 Exec=python3 /path/to/bananafone.py

@@ -20,10 +20,12 @@ import speech_recognition as sr
 from faster_whisper import WhisperModel
 
 APP_NAME = "Bananafone"
-APP_VERSION = "1.1"
+APP_VERSION = "1.2"
 CPU_THREADS = min(os.cpu_count() or 4, 8)
 LOG_DIR = os.path.expanduser("~/.local/state/bananafone")
 LOG_FILE = os.path.join(LOG_DIR, "bananafone.log")
+CONFIG_DIR = os.path.expanduser("~/.config/bananafone")
+SETTINGS_FILE = os.path.join(CONFIG_DIR, "settings.json")
 HF_CACHE_DIR = os.path.expanduser("~/.cache/huggingface/hub")
 DEFAULT_OPENAI_MODEL = os.environ.get("BANANAFONE_OPENAI_MODEL", "gpt-4o-mini-transcribe")
 DEFAULT_OPENAI_TEXT_MODEL = os.environ.get("BANANAFONE_OPENAI_TEXT_MODEL", "gpt-4o-mini")
@@ -119,6 +121,7 @@ OUTPUT_TARGETS = {
 }
 
 os.makedirs(LOG_DIR, exist_ok=True)
+os.makedirs(CONFIG_DIR, exist_ok=True)
 log_fd = os.open(LOG_FILE, os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o644)
 os.dup2(log_fd, 2)
 
@@ -132,7 +135,10 @@ class DictationApp:
         self.root.configure(bg="#111827")
         self.root.eval("tk::PlaceWindow . center")
 
-        self.mode_key = "slow"
+        self.settings = self.load_settings()
+        self.default_mode_key = self.settings.get("default_mode", "slow")
+        self.default_output_target = self.settings.get("default_output", "en")
+        self.mode_key = self.default_mode_key
         self.mode = MODES[self.mode_key]
         self.model = None
         self.model_key_loaded = None
@@ -152,12 +158,13 @@ class DictationApp:
         self.energy_floor = 0
         self.capture_sample_rate = 16000
         self.capture_sample_width = 2
-        self.output_target = "en"
+        self.output_target = self.default_output_target
 
         self.build_ui()
         self.setup_bindings()
         self.refresh_cache_status()
-        self.select_mode("slow")
+        self.set_output_target(self.output_target, update_status=False)
+        self.select_mode(self.mode_key)
 
     def build_ui(self):
         self.title_label = tk.Label(
@@ -237,6 +244,28 @@ class DictationApp:
         )
         self.cache_label.grid(row=0, column=1, padx=6)
 
+        self.defaults_frame = tk.Frame(self.root, bg="#111827")
+        self.defaults_frame.pack(pady=(0, 8))
+
+        self.save_defaults_button = tk.Button(
+            self.defaults_frame,
+            text="Tornar atual o padrao",
+            font=("Helvetica", 10, "bold"),
+            bg="#D1FAE5",
+            fg="black",
+            command=self.save_current_as_default,
+        )
+        self.save_defaults_button.grid(row=0, column=0, padx=6)
+
+        self.defaults_label = tk.Label(
+            self.defaults_frame,
+            text="Padrao: carregando...",
+            font=("Helvetica", 9),
+            fg="#9CA3AF",
+            bg="#111827",
+        )
+        self.defaults_label.grid(row=0, column=1, padx=6)
+
         self.mode_label = tk.Label(
             self.root,
             text="Clique para falar. Para sozinho apos silencio. Ctrl+Shift continua no modo segurar.",
@@ -301,6 +330,9 @@ class DictationApp:
         self.refresh_button.config(
             state=tk.DISABLED if self.is_recording or self.model_loading or self.refreshing_models else tk.NORMAL
         )
+        self.save_defaults_button.config(
+            state=tk.DISABLED if self.is_recording or self.model_loading or self.refreshing_models else tk.NORMAL
+        )
 
     def set_hold_button_idle(self):
         self.hold_button.config(
@@ -331,16 +363,62 @@ class DictationApp:
         self.mode = MODES[mode_key]
         self.root.title(f"{APP_NAME} {APP_VERSION} - {self.mode['label']}")
         self.mode_label.config(text=self.mode["status"])
+        self.refresh_defaults_label()
         self.set_mode_button_states()
         self.ensure_model_loaded_async(mode_key)
 
-    def set_output_target(self, target_key):
+    def set_output_target(self, target_key, update_status=True):
         if self.is_recording or self.model_loading or target_key not in OUTPUT_TARGETS:
             return
         self.output_target = target_key
         target = OUTPUT_TARGETS[target_key]
-        self.mode_label.config(text=target["status"])
+        if update_status:
+            self.mode_label.config(text=target["status"])
+        self.refresh_defaults_label()
         self.set_mode_button_states()
+
+    def refresh_defaults_label(self):
+        default_mode_label = MODES.get(self.default_mode_key, MODES["slow"])["label"]
+        default_output_label = OUTPUT_TARGETS.get(self.default_output_target, OUTPUT_TARGETS["en"])["label"]
+        self.defaults_label.config(text=f"Padrao: {default_mode_label} + {default_output_label}")
+
+    def load_settings(self):
+        if not os.path.isfile(SETTINGS_FILE):
+            return {}
+        try:
+            with open(SETTINGS_FILE, "r", encoding="utf-8") as handle:
+                settings = json.load(handle)
+        except Exception:
+            return {}
+
+        default_mode = settings.get("default_mode", "slow")
+        default_output = settings.get("default_output", "en")
+        if default_mode not in MODES:
+            default_mode = "slow"
+        if default_output not in OUTPUT_TARGETS:
+            default_output = "en"
+        return {
+            "default_mode": default_mode,
+            "default_output": default_output,
+        }
+
+    def write_settings(self):
+        settings = {
+            "default_mode": self.default_mode_key,
+            "default_output": self.default_output_target,
+        }
+        with open(SETTINGS_FILE, "w", encoding="utf-8") as handle:
+            json.dump(settings, handle, indent=2)
+
+    def save_current_as_default(self):
+        self.default_mode_key = self.mode_key
+        self.default_output_target = self.output_target
+        self.write_settings()
+        self.refresh_defaults_label()
+        self.update_status(
+            f"Padrao salvo: {self.mode['label']} + {OUTPUT_TARGETS[self.output_target]['label']}",
+            "#34D399",
+        )
 
     def ensure_model_loaded_async(self, mode_key):
         if self.model_key_loaded == mode_key and self.model is not None:

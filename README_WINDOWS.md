@@ -1,12 +1,15 @@
 # Bananafone no Windows
 
-Versao atual do pacote: `1.1`
+Versao atual do pacote: `1.2`
 
 Port minimo suportado: mesma interface Tkinter, captura pelo PyAudio,
 transcricao local via `faster-whisper` ou modo `API` via OpenAI.
 
 O fluxo padrao e: falar em portugues e receber texto em ingles (`EN`).
 Tambem ha saida `PT-BR` e `PT-PT`; `PT-PT` nao e default.
+Agora o app tem um botao `Tornar atual o padrao` para salvar a combinacao
+atual de modo (`Fast`, `Normal`, `API`) e saida (`EN`, `PT-BR`, `PT-PT`).
+No Windows, isso fica salvo em `%USERPROFILE%\\.config\\bananafone\\settings.json`.
 
 ## Instalar
 
