@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import os
+import platform
 import shutil
 import subprocess
 import threading
@@ -24,14 +25,24 @@ LOG_DIR = os.path.expanduser("~/.local/state/bananafone")
 LOG_FILE = os.path.join(LOG_DIR, "bananafone.log")
 HF_CACHE_DIR = os.path.expanduser("~/.cache/huggingface/hub")
 DEFAULT_OPENAI_MODEL = os.environ.get("BANANAFONE_OPENAI_MODEL", "gpt-4o-mini-transcribe")
+DEFAULT_OPENAI_TEXT_MODEL = os.environ.get("BANANAFONE_OPENAI_TEXT_MODEL", "gpt-4o-mini")
 OPENAI_TRANSCRIPT_URL = os.environ.get(
     "BANANAFONE_OPENAI_TRANSCRIPT_URL",
     "https://api.openai.com/v1/audio/transcriptions",
+)
+OPENAI_CHAT_URL = os.environ.get(
+    "BANANAFONE_OPENAI_CHAT_URL",
+    "https://api.openai.com/v1/chat/completions",
 )
 OPENAI_KEY_FILE = os.environ.get(
     "BANANAFONE_OPENAI_KEY_FILE",
     "/home/aristofeles/ai/config/ai-keys.md",
 )
+OPENAI_KEY_FILES = [
+    OPENAI_KEY_FILE,
+    os.path.expanduser("~/ai/config/ai-keys.md"),
+    os.path.expanduser("~/.config/bananafone/ai-keys.md"),
+]
 AUTO_STOP_SILENCE_SECONDS = float(os.environ.get("BANANAFONE_AUTO_STOP_SILENCE_SECONDS", "4.0"))
 MIN_SPEECH_SECONDS = float(os.environ.get("BANANAFONE_MIN_SPEECH_SECONDS", "0.35"))
 SILENCE_RMS_MULTIPLIER = float(os.environ.get("BANANAFONE_SILENCE_RMS_MULTIPLIER", "1.35"))
@@ -85,6 +96,27 @@ MODES = {
     },
 }
 
+OUTPUT_TARGETS = {
+    "en": {
+        "label": "EN",
+        "status": "Saida em ingles natural.",
+        "button_color": "#E5E7EB",
+        "text_color": "black",
+    },
+    "pt-BR": {
+        "label": "PT-BR",
+        "status": "Saida em portugues brasileiro fiel.",
+        "button_color": "#E5E7EB",
+        "text_color": "black",
+    },
+    "pt-PT": {
+        "label": "PT-PT",
+        "status": "Saida adaptada para portugues de Portugal.",
+        "button_color": "#E5E7EB",
+        "text_color": "black",
+    },
+}
+
 os.makedirs(LOG_DIR, exist_ok=True)
 log_fd = os.open(LOG_FILE, os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o644)
 os.dup2(log_fd, 2)
@@ -94,7 +126,7 @@ class DictationApp:
     def __init__(self, root):
         self.root = root
         self.root.title(APP_NAME)
-        self.root.geometry("520x380")
+        self.root.geometry("520x430")
         self.root.attributes("-topmost", True)
         self.root.configure(bg="#111827")
         self.root.eval("tk::PlaceWindow . center")
@@ -119,6 +151,7 @@ class DictationApp:
         self.energy_floor = 0
         self.capture_sample_rate = 16000
         self.capture_sample_width = 2
+        self.output_target = "en"
 
         self.build_ui()
         self.setup_bindings()
@@ -162,6 +195,24 @@ class DictationApp:
             )
             button.grid(row=0, column=column, padx=6, pady=4)
             self.mode_buttons[mode_key] = button
+
+        self.output_frame = tk.Frame(self.root, bg="#111827")
+        self.output_frame.pack(pady=(0, 10))
+
+        self.output_buttons = {}
+        for column, target_key in enumerate(("en", "pt-BR", "pt-PT")):
+            target = OUTPUT_TARGETS[target_key]
+            button = tk.Button(
+                self.output_frame,
+                text=target["label"],
+                font=("Helvetica", 11, "bold"),
+                width=8,
+                bg=target["button_color"],
+                fg=target["text_color"],
+                command=lambda key=target_key: self.set_output_target(key),
+            )
+            button.grid(row=0, column=column, padx=5, pady=2)
+            self.output_buttons[target_key] = button
 
         self.tools_frame = tk.Frame(self.root, bg="#111827")
         self.tools_frame.pack(pady=(0, 8))
@@ -240,6 +291,12 @@ class DictationApp:
                 relief=relief,
                 state=tk.NORMAL if not (self.is_recording or self.model_loading or self.refreshing_models) else tk.DISABLED,
             )
+        for key, button in self.output_buttons.items():
+            relief = tk.SUNKEN if key == self.output_target else tk.RAISED
+            button.config(
+                relief=relief,
+                state=tk.NORMAL if not (self.is_recording or self.model_loading or self.refreshing_models) else tk.DISABLED,
+            )
         self.refresh_button.config(
             state=tk.DISABLED if self.is_recording or self.model_loading or self.refreshing_models else tk.NORMAL
         )
@@ -275,6 +332,14 @@ class DictationApp:
         self.mode_label.config(text=self.mode["status"])
         self.set_mode_button_states()
         self.ensure_model_loaded_async(mode_key)
+
+    def set_output_target(self, target_key):
+        if self.is_recording or self.model_loading or target_key not in OUTPUT_TARGETS:
+            return
+        self.output_target = target_key
+        target = OUTPUT_TARGETS[target_key]
+        self.mode_label.config(text=target["status"])
+        self.set_mode_button_states()
 
     def ensure_model_loaded_async(self, mode_key):
         if self.model_key_loaded == mode_key and self.model is not None:
@@ -446,13 +511,15 @@ class DictationApp:
                 segments, info = self.model.transcribe(audio_np, **self.mode["transcribe_kwargs"])
                 text = " ".join(segment.text.strip() for segment in segments).strip()
                 language_probability = info.language_probability
-            elapsed = time.time() - started
-
             if not text:
                 raise sr.UnknownValueError()
 
-            self.copy_to_clipboard(text)
-            self.root.after(0, self.after_transcription_success, text, elapsed, language_probability)
+            output_text = self.transform_output_text(text)
+            elapsed = time.time() - started
+            if not output_text:
+                raise RuntimeError("Conversao retornou texto vazio")
+            self.copy_to_clipboard(output_text)
+            self.root.after(0, self.after_transcription_success, output_text, elapsed, language_probability)
         except sr.UnknownValueError:
             self.root.after(0, self.after_transcription_error, "Nao entendi esse gorjeio.")
         except Exception as exc:
@@ -534,20 +601,21 @@ class DictationApp:
         if env_key:
             return env_key.strip()
 
-        if not os.path.isfile(OPENAI_KEY_FILE):
-            return None
+        for key_file in dict.fromkeys(OPENAI_KEY_FILES):
+            if not os.path.isfile(key_file):
+                continue
 
-        try:
-            with open(OPENAI_KEY_FILE, "r", encoding="utf-8") as handle:
-                for line in handle:
-                    if "OpenAI (Speech):" in line and "sk-" in line:
-                        return line.split("`")[1].strip()
-            with open(OPENAI_KEY_FILE, "r", encoding="utf-8") as handle:
-                for line in handle:
-                    if "OpenAI (RAG):" in line and "sk-" in line:
-                        return line.split("`")[1].strip()
-        except Exception:
-            return None
+            try:
+                with open(key_file, "r", encoding="utf-8") as handle:
+                    for line in handle:
+                        if "OpenAI (Speech):" in line and "sk-" in line:
+                            return line.split("`")[1].strip()
+                with open(key_file, "r", encoding="utf-8") as handle:
+                    for line in handle:
+                        if "OpenAI (RAG):" in line and "sk-" in line:
+                            return line.split("`")[1].strip()
+            except Exception:
+                continue
         return None
 
     def transcribe_with_openai(self, pcm_audio):
@@ -600,6 +668,62 @@ class DictationApp:
         confidence = 1.0 if language == "pt" else None
         return text, confidence
 
+    def transform_output_text(self, text):
+        if self.output_target == "pt-BR":
+            return text
+
+        api_key = self.get_openai_api_key()
+        if not api_key:
+            raise RuntimeError("OPENAI_API_KEY ausente para converter a saida")
+
+        if self.output_target == "pt-PT":
+            system_prompt = (
+                "You convert dictated Brazilian Portuguese into natural European Portuguese. "
+                "Preserve meaning, names, numbers, times, technical terms, and message intent. "
+                "Fix obvious dictation artifacts. Output only the final text."
+            )
+        else:
+            system_prompt = (
+                "You convert dictated Brazilian Portuguese into natural, professional English. "
+                "Preserve meaning, names, numbers, times, technical terms, and message intent. "
+                "Fix obvious dictation artifacts and produce text a human would actually send. "
+                "Output only the final English text."
+            )
+
+        payload = {
+            "model": DEFAULT_OPENAI_TEXT_MODEL,
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": text},
+            ],
+            "temperature": 0,
+        }
+        request = urllib.request.Request(
+            OPENAI_CHAT_URL,
+            data=json.dumps(payload).encode("utf-8"),
+            method="POST",
+            headers={
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json",
+            },
+        )
+
+        try:
+            with urllib.request.urlopen(request, timeout=60) as response:
+                payload = json.loads(response.read().decode("utf-8"))
+        except urllib.error.HTTPError as exc:
+            details = exc.read().decode("utf-8", errors="replace")
+            raise RuntimeError(f"OpenAI text HTTP {exc.code}: {details[:160]}")
+        except urllib.error.URLError as exc:
+            raise RuntimeError(f"Falha de rede no texto: {exc.reason}")
+
+        return (
+            payload.get("choices", [{}])[0]
+            .get("message", {})
+            .get("content", "")
+            .strip()
+        )
+
     def build_multipart_body(self, boundary, fields, files):
         chunks = []
         for name, value in fields.items():
@@ -645,6 +769,12 @@ class DictationApp:
 
     def copy_to_clipboard(self, text):
         commands = []
+        system = platform.system().lower()
+        if system == "windows" and shutil.which("powershell.exe"):
+            commands.append(["powershell.exe", "-NoProfile", "-Command", "$input | Set-Clipboard"])
+        elif system == "darwin" and shutil.which("pbcopy"):
+            commands.append(["pbcopy"])
+
         if os.environ.get("XDG_SESSION_TYPE") == "wayland" and shutil.which("wl-copy"):
             commands.append(["wl-copy"])
         if shutil.which("xclip"):

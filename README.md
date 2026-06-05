@@ -24,6 +24,7 @@ de alguns segundos de silencio e copia o texto para a area de transferencia.
 - atalho `Ctrl+Shift` com a janela focada no esquema segurar/soltar
 - botao `Baixar / Atualizar modelos` para aquecer ou baixar cache local
 - status visual do cache dos modelos `small` e `medium`
+- seletor de saida: `EN` por padrao, com opcoes `PT-BR` e `PT-PT`
 - log local em `~/.local/state/bananafone/bananafone.log`
 
 ## Limitacoes
@@ -57,6 +58,11 @@ O modo `API` usa a API de transcricao da OpenAI. O app procura a chave nesta ord
 
 Para trocar o modelo do modo `API`, use `BANANAFONE_OPENAI_MODEL`.
 O padrao atual e `gpt-4o-mini-transcribe`.
+
+A saida padrao e `EN`: voce fala em portugues e recebe texto em ingles.
+As opcoes `EN` e `PT-PT` usam tambem um modelo de texto da OpenAI para
+converter o resultado transcrito. Para trocar esse modelo, use
+`BANANAFONE_OPENAI_TEXT_MODEL`. O padrao atual e `gpt-4o-mini`.
 
 ### Onde colocar a chave
 
@@ -123,6 +129,20 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
+### Windows
+
+O port Windows fica documentado em [`README_WINDOWS.md`](README_WINDOWS.md).
+Resumo:
+
+```powershell
+cd caminho\para\bananafone
+Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
+.\install_windows.ps1
+```
+
+O modo `API` usa `OPENAI_API_KEY` ou um arquivo `ai-keys.md` em
+`%USERPROFILE%\.config\bananafone\ai-keys.md`.
+
 ## Uso rapido
 
 ```bash
@@ -133,10 +153,12 @@ Fluxo:
 
 1. abra o app
 2. o modo padrao e `API`
-3. troque para `Fast` ou `Normal` se quiser
-4. clique no botao principal para falar
-5. espere parar sozinho no silencio ou clique novamente para encerrar
-6. cole o texto onde quiser
+3. a saida padrao e `EN`
+4. troque para `PT-BR` ou `PT-PT` se quiser manter portugues
+5. troque para `Fast` ou `Normal` se quiser transcricao local antes da conversao
+6. clique no botao principal para falar
+7. espere parar sozinho no silencio ou clique novamente para encerrar
+8. cole o texto onde quiser
 
 ## Atualizacao
 
@@ -196,4 +218,6 @@ python -m py_compile bananafone.py
 Na primeira execucao dos modos locais, o `faster-whisper` pode baixar o modelo
 e aquecer o cache local. O botao `Baixar / Atualizar modelos` existe justamente
 para isso. O modo `API` nao usa cache local do Whisper; ele envia o audio
-capturado para a API de transcricao configurada.
+capturado para a API de transcricao configurada. Quando a saida estiver em
+`EN` ou `PT-PT`, o texto transcrito passa por conversao OpenAI antes de ser
+copiado.
