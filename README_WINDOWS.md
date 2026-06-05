@@ -1,6 +1,6 @@
 # Bananafone no Windows
 
-Versao atual do pacote: `1.2`
+Versao atual do pacote: `1.3`
 
 Port minimo suportado: mesma interface Tkinter, captura pelo PyAudio,
 transcricao local via `faster-whisper` ou modo `API` via OpenAI.
@@ -26,6 +26,8 @@ O instalador cria:
 - `.venv`
 - dependencias Python
 - atalho `Bananafone.lnk` na Area de Trabalho
+- atalho apontando para `pythonw.exe` quando disponivel, para nao deixar uma janela
+  preta aberta junto com o app
 
 ## Chave da API
 
@@ -61,6 +63,12 @@ Formato aceito no arquivo:
 
 ```powershell
 .\.venv\Scripts\python.exe .\bananafone.py
+```
+
+Se quiser abrir sem console tambem no manual, use:
+
+```powershell
+.\.venv\Scripts\pythonw.exe .\bananafone.py
 ```
 
 ## Atualizar

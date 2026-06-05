@@ -8,6 +8,7 @@ $ErrorActionPreference = "Stop"
 $ProjectDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $VenvDir = Join-Path $ProjectDir ".venv"
 $Python = Join-Path $VenvDir "Scripts\python.exe"
+$Pythonw = Join-Path $VenvDir "Scripts\pythonw.exe"
 $ShortcutPath = Join-Path ([Environment]::GetFolderPath("Desktop")) "Bananafone.lnk"
 $ConfigDir = Join-Path $env:USERPROFILE ".config\bananafone"
 $KeyFile = Join-Path $ConfigDir "ai-keys.md"
@@ -43,7 +44,11 @@ if (-not [string]::IsNullOrWhiteSpace($OpenAIKey)) {
 
 $WScriptShell = New-Object -ComObject WScript.Shell
 $Shortcut = $WScriptShell.CreateShortcut($ShortcutPath)
-$Shortcut.TargetPath = $Python
+$ShortcutTarget = $Python
+if (Test-Path $Pythonw) {
+    $ShortcutTarget = $Pythonw
+}
+$Shortcut.TargetPath = $ShortcutTarget
 $Shortcut.Arguments = "`"$ProjectDir\bananafone.py`""
 $Shortcut.WorkingDirectory = $ProjectDir
 $Shortcut.IconLocation = "$env:SystemRoot\System32\SHELL32.dll,220"
@@ -51,6 +56,7 @@ $Shortcut.Save()
 
 Write-Host "Bananafone instalado."
 Write-Host "Atalho criado em: $ShortcutPath"
+Write-Host "Executavel do atalho: $ShortcutTarget"
 if (Test-Path $KeyFile) {
     Write-Host "Chave OpenAI configurada em: $KeyFile"
 }

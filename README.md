@@ -1,6 +1,6 @@
 # Bananafone
 
-Versao atual do pacote: `1.2`
+Versao atual do pacote: `1.3`
 
 Ditado para Linux com dois modos locais e um modo de API, pensado para ficar
 aberto na tela durante o uso diario.
@@ -147,6 +147,8 @@ Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
 
 O modo `API` usa `OPENAI_API_KEY` ou um arquivo `ai-keys.md` em
 `%USERPROFILE%\.config\bananafone\ai-keys.md`.
+O atalho do Windows passa a usar `pythonw.exe` quando disponivel, para abrir o
+app sem console preto fixo.
 
 ## Uso rapido
 

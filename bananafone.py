@@ -20,7 +20,7 @@ import speech_recognition as sr
 from faster_whisper import WhisperModel
 
 APP_NAME = "Bananafone"
-APP_VERSION = "1.2"
+APP_VERSION = "1.3"
 CPU_THREADS = min(os.cpu_count() or 4, 8)
 LOG_DIR = os.path.expanduser("~/.local/state/bananafone")
 LOG_FILE = os.path.join(LOG_DIR, "bananafone.log")
