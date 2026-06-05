@@ -20,6 +20,7 @@ import speech_recognition as sr
 from faster_whisper import WhisperModel
 
 APP_NAME = "Bananafone"
+APP_VERSION = "1.1"
 CPU_THREADS = min(os.cpu_count() or 4, 8)
 LOG_DIR = os.path.expanduser("~/.local/state/bananafone")
 LOG_FILE = os.path.join(LOG_DIR, "bananafone.log")
@@ -125,7 +126,7 @@ os.dup2(log_fd, 2)
 class DictationApp:
     def __init__(self, root):
         self.root = root
-        self.root.title(APP_NAME)
+        self.root.title(f"{APP_NAME} {APP_VERSION}")
         self.root.geometry("520x430")
         self.root.attributes("-topmost", True)
         self.root.configure(bg="#111827")
@@ -328,7 +329,7 @@ class DictationApp:
             return
         self.mode_key = mode_key
         self.mode = MODES[mode_key]
-        self.root.title(f"{APP_NAME} - {self.mode['label']}")
+        self.root.title(f"{APP_NAME} {APP_VERSION} - {self.mode['label']}")
         self.mode_label.config(text=self.mode["status"])
         self.set_mode_button_states()
         self.ensure_model_loaded_async(mode_key)

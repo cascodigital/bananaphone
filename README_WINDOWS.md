@@ -1,5 +1,7 @@
 # Bananafone no Windows
 
+Versao atual do pacote: `1.1`
+
 Port minimo suportado: mesma interface Tkinter, captura pelo PyAudio,
 transcricao local via `faster-whisper` ou modo `API` via OpenAI.
 

@@ -17,7 +17,7 @@ fi
 
 cat > "$DESKTOP_FILE" <<EOF
 [Desktop Entry]
-Version=1.0
+Version=1.1
 Name=Bananafone
 Comment=Ditado local e via API para Linux
 Exec=$VENV_DIR/bin/python $REPO_DIR/bananafone.py

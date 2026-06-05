@@ -1,5 +1,7 @@
 # Bananafone
 
+Versao atual do pacote: `1.1`
+
 Ditado para Linux com dois modos locais e um modo de API, pensado para ficar
 aberto na tela durante o uso diario.
 
