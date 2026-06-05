@@ -58,6 +58,29 @@ Formato aceito no arquivo:
 .\.venv\Scripts\python.exe .\bananafone.py
 ```
 
+## Atualizar
+
+Pode instalar por cima, no mesmo diretório.
+
+Fluxo recomendado:
+
+```powershell
+cd caminho\para\bananafone
+git pull
+.\install_windows.ps1
+```
+
+Se voce usa o instalador privado com chave embutida:
+
+```powershell
+cd caminho\para\bananafone
+git pull
+.\install_windows_private.ps1
+```
+
+Isso reutiliza a `.venv`, atualiza dependencias se preciso e recria o atalho.
+Nao precisa desinstalar antes.
+
 ## Observacoes
 
 - O clipboard usa `Set-Clipboard` nativo do PowerShell.
