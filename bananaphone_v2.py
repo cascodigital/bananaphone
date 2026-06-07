@@ -974,25 +974,118 @@ class DictationApp:
         )
         baseurl_entry.pack(fill=tk.X, pady=(2, 6))
 
-        def on_provider_change(label):
-            key = TEXT_PROVIDERS.get(label, "openai")
-            model_var.set(PROVIDER_DEFAULT_MODEL.get(key, DEFAULT_OPENAI_TEXT_MODEL))
-            baseurl_var.set(PROVIDER_DEFAULT_BASE_URL.get(key, DEFAULT_OPENAI_BASE_URL))
-
-        provider_menu.configure(command=on_provider_change)
-
-        ctk.CTkLabel(
+        local_model_hint = ctk.CTkLabel(
             body,
             text=(
-                "Ollama (local): run  ollama pull qwen2.5:3b  then  ollama serve. "
-                "No API key needed; the model is freed from RAM after each call. "
-                "Cloud is faster; local keeps audio and tickets fully on this machine."
+                "Ollama (local): pick the model above, then click Download local model. "
+                "Needs Ollama installed and running (ollama.com) — the app pulls the model "
+                "but cannot install Ollama itself. No API key; the model is freed from RAM "
+                "after each call. Cloud is faster; local keeps audio and tickets on this machine."
             ),
             font=ctk.CTkFont(size=11),
             text_color=COLOR_SUBTLE,
             wraplength=460,
             justify="left",
-        ).pack(anchor="w", pady=(0, 16))
+        )
+        local_model_hint.pack(anchor="w", pady=(0, 16))
+
+        local_model_row = ctk.CTkFrame(body, fg_color="transparent")
+        pull_button = ctk.CTkButton(
+            local_model_row,
+            text="Download local model",
+            font=ctk.CTkFont(size=12, weight="bold"),
+            height=32,
+            corner_radius=10,
+            fg_color=BTN_PRIMARY,
+            hover_color=BTN_PRIMARY_HOVER,
+        )
+        pull_button.pack(side=tk.LEFT)
+        pull_status = ctk.CTkLabel(
+            local_model_row,
+            text="",
+            font=ctk.CTkFont(size=11),
+            text_color=COLOR_MUTED,
+            wraplength=300,
+            justify="left",
+        )
+        pull_status.pack(side=tk.LEFT, padx=(10, 0))
+
+        def ollama_root_from(base):
+            base = base.strip().rstrip("/")
+            if base.endswith("/v1"):
+                base = base[:-3].rstrip("/")
+            return base
+
+        def finish_pull(message, color):
+            if pull_status.winfo_exists():
+                pull_status.configure(text=message, text_color=color)
+            if pull_button.winfo_exists():
+                pull_button.configure(state="normal", text="Download local model")
+
+        def pull_worker(root_url, model):
+            try:
+                urllib.request.urlopen(urllib.request.Request(root_url + "/api/tags"), timeout=3).read()
+            except Exception:
+                self.root.after(0, finish_pull, "Ollama not reachable. Install it from ollama.com and start it.", COLOR_ERROR)
+                return
+            try:
+                data = json.dumps({"name": model}).encode("utf-8")
+                request = urllib.request.Request(
+                    root_url + "/api/pull",
+                    data=data,
+                    method="POST",
+                    headers={"Content-Type": "application/json"},
+                )
+                with urllib.request.urlopen(request, timeout=3600) as resp:
+                    for raw in resp:
+                        line = raw.decode("utf-8", errors="replace").strip()
+                        if not line:
+                            continue
+                        try:
+                            obj = json.loads(line)
+                        except json.JSONDecodeError:
+                            continue
+                        if obj.get("error"):
+                            self.root.after(0, finish_pull, f"Pull error: {str(obj['error'])[:80]}", COLOR_ERROR)
+                            return
+                        status = obj.get("status", "")
+                        total = obj.get("total")
+                        completed = obj.get("completed")
+                        if total and completed:
+                            msg = f"{status} {completed * 100 / total:.0f}%"
+                        else:
+                            msg = status
+                        self.root.after(0, lambda m=msg: pull_status.winfo_exists() and pull_status.configure(text=m, text_color=COLOR_INFO))
+                self.root.after(0, finish_pull, f"Model '{model}' ready.", COLOR_OK)
+            except Exception as exc:
+                self.root.after(0, finish_pull, f"Pull failed: {str(exc)[:80]}", COLOR_ERROR)
+
+        def start_pull():
+            model = model_var.get().strip()
+            if not model:
+                pull_status.configure(text="Set a model name first.", text_color=COLOR_WARN)
+                return
+            root_url = ollama_root_from(baseurl_var.get())
+            pull_button.configure(state="disabled", text="Downloading...")
+            pull_status.configure(text="Contacting Ollama...", text_color=COLOR_WARN)
+            threading.Thread(target=pull_worker, args=(root_url, model), daemon=True).start()
+
+        pull_button.configure(command=start_pull)
+
+        def update_local_row(provider_key):
+            if provider_key == "ollama":
+                local_model_row.pack(anchor="w", pady=(0, 16), before=local_model_hint)
+            else:
+                local_model_row.pack_forget()
+
+        def on_provider_change(label):
+            key = TEXT_PROVIDERS.get(label, "openai")
+            model_var.set(PROVIDER_DEFAULT_MODEL.get(key, DEFAULT_OPENAI_TEXT_MODEL))
+            baseurl_var.set(PROVIDER_DEFAULT_BASE_URL.get(key, DEFAULT_OPENAI_BASE_URL))
+            update_local_row(key)
+
+        provider_menu.configure(command=on_provider_change)
+        update_local_row(self.text_provider)
 
         ctk.CTkLabel(
             body,
