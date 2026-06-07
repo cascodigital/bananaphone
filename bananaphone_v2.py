@@ -6,7 +6,6 @@ import subprocess
 import threading
 import time
 import tkinter as tk
-from tkinter import ttk
 import traceback
 import audioop
 import json
@@ -16,6 +15,7 @@ import uuid
 import wave
 from io import BytesIO
 
+import customtkinter as ctk
 import numpy as np
 import speech_recognition as sr
 from faster_whisper import WhisperModel
@@ -51,39 +51,64 @@ DEFAULT_SILENCE_TIMEOUT = os.environ.get("BANANAPHONE_V2_SILENCE_TIMEOUT", "4")
 SILENCE_TIMEOUT_OPTIONS = ("4", "7", "10", "off")
 MIN_SPEECH_SECONDS = float(os.environ.get("BANANAFONE_MIN_SPEECH_SECONDS", "0.35"))
 SILENCE_RMS_MULTIPLIER = float(os.environ.get("BANANAFONE_SILENCE_RMS_MULTIPLIER", "1.35"))
-SELECTED_BG = "#111827"
-SELECTED_FG = "#F9FAFB"
-SELECTED_RING = "#60A5FA"
-UNSELECTED_RING = "#9CA3AF"
+
+# --- Modern dark palette -------------------------------------------------
+COLOR_WINDOW = "#0F172A"      # slate-950
+COLOR_CARD = "#1E293B"        # slate-800
+COLOR_CARD_BORDER = "#334155" # slate-700
+COLOR_FIELD = "#0B1220"       # near-black field bg for textboxes
+COLOR_TITLE = "#F8FAFC"       # slate-50
+COLOR_MUTED = "#94A3B8"       # slate-400
+COLOR_SUBTLE = "#64748B"      # slate-500
+
+# Status / feedback colors (kept compatible with prior hex usage)
+COLOR_OK = "#34D399"
+COLOR_INFO = "#60A5FA"
+COLOR_WARN = "#FBBF24"
+COLOR_ERROR = "#F87171"
+
+# Accent set for the main talk button
+TALK_IDLE = "#F59E0B"
+TALK_IDLE_HOVER = "#FBBF24"
+TALK_IDLE_TEXT = "#1F2937"
+TALK_REC = "#DC2626"
+TALK_REC_HOVER = "#EF4444"
+TALK_BUSY = "#1D4ED8"
+TALK_LOADING = "#475569"
+TALK_FAIL = "#7F1D1D"
+
+# Secondary button accents
+BTN_PRIMARY = "#2563EB"
+BTN_PRIMARY_HOVER = "#1D4ED8"
+BTN_NEUTRAL = "#334155"
+BTN_NEUTRAL_HOVER = "#475569"
+BTN_DANGER = "#7F1D1D"
+BTN_DANGER_HOVER = "#991B1B"
+BTN_GOOD = "#047857"
+BTN_GOOD_HOVER = "#059669"
 
 LANGUAGES = {
     "en": {
         "label": "EN",
         "name": "English",
         "dictation_name": "English",
-        "button_color": "#E5E7EB",
-        "text_color": "black",
     },
     "pt": {
         "label": "PT",
         "name": "Brazilian Portuguese",
         "dictation_name": "Brazilian Portuguese",
-        "button_color": "#D1FAE5",
-        "text_color": "black",
     },
     "es": {
         "label": "ES",
         "name": "Spanish",
         "dictation_name": "Spanish",
-        "button_color": "#FEF3C7",
-        "text_color": "black",
     },
 }
 
 OUTPUT_TARGETS = {
-    "en": {"label": "EN", "button_color": "#E5E7EB", "text_color": "black"},
-    "pt": {"label": "PT", "button_color": "#D1FAE5", "text_color": "black"},
-    "es": {"label": "ES", "button_color": "#FEF3C7", "text_color": "black"},
+    "en": {"label": "EN"},
+    "pt": {"label": "PT"},
+    "es": {"label": "ES"},
 }
 
 MODE_CHOICES = {
@@ -104,8 +129,6 @@ LANGUAGE_LABELS = {value: key for key, value in LANGUAGE_CHOICES.items()}
 MODES = {
     "fast": {
         "label": "Fast",
-        "button_color": "#F59E0B",
-        "text_color": "black",
         "status": "Fast local transcription. Less precise with numbers.",
         "model_name": "small",
         "ambient_duration": 0.30,
@@ -122,8 +145,6 @@ MODES = {
     },
     "normal": {
         "label": "Normal",
-        "button_color": "#10B981",
-        "text_color": "black",
         "status": "Balanced local transcription.",
         "model_name": "medium",
         "ambient_duration": 0.45,
@@ -140,8 +161,6 @@ MODES = {
     },
     "slow": {
         "label": "API",
-        "button_color": "#2563EB",
-        "text_color": "white",
         "status": "Cloud transcription for higher precision.",
         "backend": "openai",
         "api_model": DEFAULT_OPENAI_MODEL,
@@ -160,9 +179,10 @@ class DictationApp:
     def __init__(self, root):
         self.root = root
         self.root.title(f"{APP_NAME} {APP_VERSION}")
-        self.root.geometry("680x760")
+        self.root.geometry("560x740")
+        self.root.minsize(520, 700)
         self.root.attributes("-topmost", True)
-        self.root.configure(bg="#111827")
+        self.root.configure(fg_color=COLOR_WINDOW)
         self.root.eval("tk::PlaceWindow . center")
 
         self.settings = self.load_settings()
@@ -189,6 +209,7 @@ class DictationApp:
         self.hotkey_recording = False
         self.transcription_thread = None
         self.refreshing_models = False
+        self.refresh_button = None
         self.energy_floor = 0
         self.capture_sample_rate = 16000
         self.capture_sample_width = 2
@@ -209,254 +230,257 @@ class DictationApp:
             self.mode = MODES[self.mode_key]
         self.select_mode(self.mode_key)
 
+    # ------------------------------------------------------------------ UI
     def build_ui(self):
-        self.title_label = tk.Label(
-            self.root,
-            text="BANANAPHONE",
-            font=("Helvetica", 20, "bold"),
-            fg="#F9FAFB",
-            bg="#111827",
-        )
-        self.title_label.pack(pady=(16, 6))
+        container = ctk.CTkFrame(self.root, fg_color=COLOR_WINDOW)
+        container.pack(fill=tk.BOTH, expand=True, padx=20, pady=16)
 
-        self.status_label = tk.Label(
-            self.root,
+        # Header --------------------------------------------------------
+        header = ctk.CTkFrame(container, fg_color="transparent")
+        header.pack(fill=tk.X)
+        self.title_label = ctk.CTkLabel(
+            header,
+            text="🍌  BananaPhone",
+            font=ctk.CTkFont(size=24, weight="bold"),
+            text_color=COLOR_TITLE,
+        )
+        self.title_label.pack()
+        self.status_label = ctk.CTkLabel(
+            header,
             text="Loading API mode...",
-            font=("Helvetica", 12),
-            fg="#D1D5DB",
-            bg="#111827",
-            wraplength=560,
+            font=ctk.CTkFont(size=13),
+            text_color=COLOR_MUTED,
+            wraplength=480,
         )
-        self.status_label.pack(pady=(0, 10))
+        self.status_label.pack(pady=(2, 0))
 
-        self.route_frame = tk.Frame(self.root, bg="#172033", highlightthickness=1, highlightbackground="#334155")
-        self.route_frame.pack(fill=tk.X, padx=34, pady=(2, 14))
-
-        self.mode_buttons = {}
-        self.input_buttons = {}
-        self.output_buttons = {}
+        # Route card ----------------------------------------------------
+        self.route_frame = ctk.CTkFrame(
+            container,
+            fg_color=COLOR_CARD,
+            border_color=COLOR_CARD_BORDER,
+            border_width=1,
+            corner_radius=14,
+        )
+        self.route_frame.pack(fill=tk.X, pady=(16, 8))
 
         self.engine_var = tk.StringVar(value="Jira Mode" if self.jira_mode else MODE_LABELS.get(self.mode_key, "API"))
         self.input_var = tk.StringVar(value=LANGUAGE_LABELS.get(self.input_language, "English"))
         self.output_var = tk.StringVar(value=LANGUAGE_LABELS.get(self.output_target, "English"))
 
-        for column, (label, variable, values, handler) in enumerate(
-            (
-                ("Engine", self.engine_var, tuple(MODE_CHOICES.keys()), self.on_engine_selected),
-                ("Input", self.input_var, tuple(LANGUAGE_CHOICES.keys()), self.on_input_selected),
-                ("Output", self.output_var, tuple(LANGUAGE_CHOICES.keys()), self.on_output_selected),
-            )
-        ):
-            group = tk.Frame(self.route_frame, bg="#172033")
-            group.grid(row=0, column=column, padx=12, pady=12, sticky="ew")
-            tk.Label(
-                group,
-                text=label,
-                font=("Helvetica", 9, "bold"),
-                fg="#94A3B8",
-                bg="#172033",
-            ).pack(anchor="w", pady=(0, 4))
-            combo = ttk.Combobox(
-                group,
-                textvariable=variable,
-                values=values,
-                width=14,
-                state="readonly",
-                font=("Helvetica", 10),
-            )
-            combo.pack(fill=tk.X)
-            combo.bind("<<ComboboxSelected>>", handler)
-            if label == "Engine":
-                self.engine_combo = combo
-            elif label == "Input":
-                self.input_combo = combo
-            else:
-                self.output_combo = combo
-
+        self.engine_combo = self._build_route_field(
+            self.route_frame, 0, "ENGINE", self.engine_var,
+            tuple(MODE_CHOICES.keys()), self.on_engine_selected,
+        )
+        self.input_combo = self._build_route_field(
+            self.route_frame, 1, "INPUT", self.input_var,
+            tuple(LANGUAGE_CHOICES.keys()), self.on_input_selected,
+        )
+        self.output_combo = self._build_route_field(
+            self.route_frame, 2, "OUTPUT", self.output_var,
+            tuple(LANGUAGE_CHOICES.keys()), self.on_output_selected,
+        )
         for column in range(3):
             self.route_frame.grid_columnconfigure(column, weight=1)
 
-        self.route_label = tk.Label(
-            self.root,
-            text="Click to talk. Auto-stops after silence. Ctrl+Shift still works while focused.",
-            font=("Helvetica", 10),
-            fg="#9CA3AF",
-            bg="#111827",
-            wraplength=560,
+        self.route_label = ctk.CTkLabel(
+            container,
+            text="Click to talk. Auto-stops after silence. Ctrl+Shift works while focused.",
+            font=ctk.CTkFont(size=11),
+            text_color=COLOR_SUBTLE,
+            wraplength=480,
         )
         self.route_label.pack(pady=(0, 12))
 
-        self.hold_button = tk.Button(
-            self.root,
-            text="PRESS TO TALK\nAuto-stops after silence",
-            font=("Helvetica", 15, "bold"),
-            width=24,
-            height=3,
-            bg="#374151",
-            fg="#F9FAFB",
-            relief=tk.RAISED,
-            justify=tk.CENTER,
+        # Main talk button ---------------------------------------------
+        self.hold_button = ctk.CTkButton(
+            container,
+            text="PRESS TO TALK",
+            font=ctk.CTkFont(size=17, weight="bold"),
+            height=72,
+            corner_radius=16,
+            fg_color=TALK_IDLE,
+            hover_color=TALK_IDLE_HOVER,
+            text_color=TALK_IDLE_TEXT,
             command=self.on_main_button_click,
         )
-        self.hold_button.pack(pady=(0, 12))
+        self.hold_button.pack(fill=tk.X, padx=4, pady=(0, 14))
 
-        self.result_text = tk.Text(
-            self.root,
-            height=6,
-            width=74,
-            font=("Helvetica", 10),
-            bg="#1F2937",
-            fg="#F9FAFB",
-            state=tk.DISABLED,
+        # Normal result area -------------------------------------------
+        self.result_text = ctk.CTkTextbox(
+            container,
+            height=150,
+            font=ctk.CTkFont(size=13),
+            fg_color=COLOR_FIELD,
+            border_color=COLOR_CARD_BORDER,
+            border_width=1,
+            corner_radius=12,
+            wrap="word",
         )
-        self.result_text.pack(pady=(0, 12))
+        self.result_text.configure(state="disabled")
 
-        self.jira_frame = tk.Frame(self.root, bg="#111827")
+        # Jira panel ----------------------------------------------------
+        self.jira_frame = ctk.CTkFrame(container, fg_color="transparent")
 
-        self.jira_actions_frame = tk.Frame(self.jira_frame, bg="#111827")
-        self.jira_actions_frame.pack(fill=tk.X, pady=(0, 6))
+        self.jira_actions_frame = ctk.CTkFrame(self.jira_frame, fg_color="transparent")
+        self.jira_actions_frame.pack(fill=tk.X, pady=(0, 8))
 
-        self.generate_jira_button = tk.Button(
+        self.generate_jira_button = ctk.CTkButton(
             self.jira_actions_frame,
             text="Generate JIRA",
-            font=("Helvetica", 9, "bold"),
-            width=14,
-            bg="#BFDBFE",
-            fg="black",
+            font=ctk.CTkFont(size=12, weight="bold"),
+            height=32,
+            corner_radius=10,
+            fg_color=BTN_PRIMARY,
+            hover_color=BTN_PRIMARY_HOVER,
             command=self.generate_jira_from_notes,
         )
         self.generate_jira_button.pack(side=tk.LEFT, padx=(0, 6))
 
-        self.clear_notes_button = tk.Button(
+        self.clear_notes_button = ctk.CTkButton(
             self.jira_actions_frame,
-            text="Clear Notes",
-            font=("Helvetica", 9, "bold"),
-            width=12,
-            bg="#FEE2E2",
-            fg="black",
+            text="Clear",
+            width=70,
+            font=ctk.CTkFont(size=12, weight="bold"),
+            height=32,
+            corner_radius=10,
+            fg_color=BTN_DANGER,
+            hover_color=BTN_DANGER_HOVER,
             command=self.clear_jira_notes,
         )
         self.clear_notes_button.pack(side=tk.LEFT, padx=(0, 6))
 
-        self.copy_customer_button = tk.Button(
-            self.jira_actions_frame,
-            text="Copy Customer",
-            font=("Helvetica", 9, "bold"),
-            width=14,
-            bg="#E5E7EB",
-            fg="black",
-            command=self.copy_customer_comment,
-        )
-        self.copy_customer_button.pack(side=tk.RIGHT, padx=(6, 0))
-
-        self.copy_internal_button = tk.Button(
+        self.copy_internal_button = ctk.CTkButton(
             self.jira_actions_frame,
             text="Copy Internal",
-            font=("Helvetica", 9, "bold"),
-            width=14,
-            bg="#E5E7EB",
-            fg="black",
+            font=ctk.CTkFont(size=12, weight="bold"),
+            height=32,
+            corner_radius=10,
+            fg_color=BTN_NEUTRAL,
+            hover_color=BTN_NEUTRAL_HOVER,
             command=self.copy_internal_note,
         )
-        self.copy_internal_button.pack(side=tk.RIGHT, padx=(6, 0))
+        self.copy_internal_button.pack(side=tk.RIGHT)
 
-        style = ttk.Style()
-        style.configure("Banana.TNotebook", background="#111827", borderwidth=0)
-        style.configure("Banana.TNotebook.Tab", padding=(12, 5))
-
-        self.jira_notebook = ttk.Notebook(self.jira_frame, style="Banana.TNotebook")
-        self.jira_notebook.pack(fill=tk.BOTH, expand=False)
-
-        self.raw_notes_tab = tk.Frame(self.jira_notebook, bg="#111827")
-        self.customer_tab = tk.Frame(self.jira_notebook, bg="#111827")
-        self.internal_tab = tk.Frame(self.jira_notebook, bg="#111827")
-
-        self.jira_notebook.add(self.raw_notes_tab, text="Raw Notes")
-        self.jira_notebook.add(self.customer_tab, text="Customer")
-        self.jira_notebook.add(self.internal_tab, text="Internal")
-
-        self.raw_notes_text = tk.Text(
-            self.raw_notes_tab,
-            height=8,
-            width=74,
-            font=("Helvetica", 10),
-            bg="#1F2937",
-            fg="#F9FAFB",
-            state=tk.DISABLED,
+        self.copy_customer_button = ctk.CTkButton(
+            self.jira_actions_frame,
+            text="Copy Customer",
+            font=ctk.CTkFont(size=12, weight="bold"),
+            height=32,
+            corner_radius=10,
+            fg_color=BTN_NEUTRAL,
+            hover_color=BTN_NEUTRAL_HOVER,
+            command=self.copy_customer_comment,
         )
-        self.raw_notes_text.pack(pady=(2, 8))
+        self.copy_customer_button.pack(side=tk.RIGHT, padx=(0, 6))
 
-        self.customer_text = tk.Text(
-            self.customer_tab,
-            height=8,
-            width=74,
-            font=("Helvetica", 10),
-            bg="#1F2937",
-            fg="#F9FAFB",
-            state=tk.DISABLED,
+        self.jira_tabs = ctk.CTkTabview(
+            self.jira_frame,
+            fg_color=COLOR_CARD,
+            segmented_button_fg_color=COLOR_CARD,
+            segmented_button_selected_color=BTN_PRIMARY,
+            segmented_button_selected_hover_color=BTN_PRIMARY_HOVER,
+            corner_radius=12,
+            height=210,
         )
-        self.customer_text.pack(pady=(2, 8))
+        self.jira_tabs.pack(fill=tk.BOTH, expand=True)
 
-        self.internal_text = tk.Text(
-            self.internal_tab,
-            height=8,
-            width=74,
-            font=("Helvetica", 10),
-            bg="#1F2937",
-            fg="#F9FAFB",
-            state=tk.DISABLED,
-        )
-        self.internal_text.pack(pady=(2, 8))
+        self.raw_notes_tab = self.jira_tabs.add("Raw Notes")
+        self.customer_tab = self.jira_tabs.add("Customer")
+        self.internal_tab = self.jira_tabs.add("Internal")
 
-        self.bottom_frame = tk.Frame(self.root, bg="#111827")
-        self.bottom_frame.pack(fill=tk.X, padx=28, pady=(0, 8))
+        self.raw_notes_text = self._build_panel_textbox(self.raw_notes_tab)
+        self.customer_text = self._build_panel_textbox(self.customer_tab)
+        self.internal_text = self._build_panel_textbox(self.internal_tab)
 
-        self.bottom_status_frame = tk.Frame(self.bottom_frame, bg="#111827")
-        self.bottom_status_frame.pack(fill=tk.X, pady=(0, 8))
+        # Bottom bar ----------------------------------------------------
+        self.bottom_frame = ctk.CTkFrame(container, fg_color="transparent")
+        self.bottom_frame.pack(side=tk.BOTTOM, fill=tk.X, pady=(10, 0))
 
-        self.cache_label = tk.Label(
-            self.bottom_status_frame,
+        self.cache_label = ctk.CTkLabel(
+            self.bottom_frame,
             text="Models: checking...",
-            font=("Helvetica", 9),
-            fg="#9CA3AF",
-            bg="#111827",
-            anchor="center",
+            font=ctk.CTkFont(size=11),
+            text_color=COLOR_SUBTLE,
         )
-        self.cache_label.pack()
+        self.cache_label.pack(pady=(0, 2))
 
-        self.bottom_actions_frame = tk.Frame(self.bottom_frame, bg="#111827")
+        self.defaults_label = ctk.CTkLabel(
+            self.bottom_frame,
+            text="Default: loading...",
+            font=ctk.CTkFont(size=11),
+            text_color=COLOR_MUTED,
+        )
+        self.defaults_label.pack(pady=(0, 8))
+
+        self.bottom_actions_frame = ctk.CTkFrame(self.bottom_frame, fg_color="transparent")
         self.bottom_actions_frame.pack()
 
-        self.save_defaults_button = tk.Button(
+        self.save_defaults_button = ctk.CTkButton(
             self.bottom_actions_frame,
             text="Set Default",
-            font=("Helvetica", 10, "bold"),
-            width=11,
-            bg="#D1FAE5",
-            fg="black",
+            width=130,
+            font=ctk.CTkFont(size=12, weight="bold"),
+            height=34,
+            corner_radius=10,
+            fg_color=BTN_GOOD,
+            hover_color=BTN_GOOD_HOVER,
             command=self.save_current_as_default,
         )
         self.save_defaults_button.grid(row=0, column=0, padx=6)
 
-        self.settings_button = tk.Button(
+        self.settings_button = ctk.CTkButton(
             self.bottom_actions_frame,
-            text="Settings",
-            font=("Helvetica", 10, "bold"),
-            width=11,
-            bg="#DBEAFE",
-            fg="black",
+            text="⚙  Settings",
+            width=130,
+            font=ctk.CTkFont(size=12, weight="bold"),
+            height=34,
+            corner_radius=10,
+            fg_color=BTN_NEUTRAL,
+            hover_color=BTN_NEUTRAL_HOVER,
             command=self.open_settings_window,
         )
         self.settings_button.grid(row=0, column=1, padx=6)
 
-        self.defaults_label = tk.Label(
-            self.root,
-            text="Default: loading...",
-            font=("Helvetica", 9),
-            fg="#9CA3AF",
-            bg="#111827",
+    def _build_route_field(self, parent, column, label, variable, values, handler):
+        group = ctk.CTkFrame(parent, fg_color="transparent")
+        group.grid(row=0, column=column, padx=10, pady=12, sticky="ew")
+        ctk.CTkLabel(
+            group,
+            text=label,
+            font=ctk.CTkFont(size=10, weight="bold"),
+            text_color=COLOR_MUTED,
+        ).pack(anchor="w", pady=(0, 4))
+        menu = ctk.CTkOptionMenu(
+            group,
+            variable=variable,
+            values=list(values),
+            command=handler,
+            font=ctk.CTkFont(size=12),
+            fg_color=COLOR_FIELD,
+            button_color=BTN_NEUTRAL,
+            button_hover_color=BTN_NEUTRAL_HOVER,
+            corner_radius=8,
+            dropdown_fg_color=COLOR_CARD,
+            dropdown_hover_color=BTN_PRIMARY,
         )
-        self.defaults_label.pack(pady=(0, 8))
+        menu.pack(fill=tk.X)
+        return menu
+
+    def _build_panel_textbox(self, parent):
+        textbox = ctk.CTkTextbox(
+            parent,
+            height=160,
+            font=ctk.CTkFont(size=13),
+            fg_color=COLOR_FIELD,
+            border_color=COLOR_CARD_BORDER,
+            border_width=1,
+            corner_radius=8,
+            wrap="word",
+        )
+        textbox.pack(fill=tk.BOTH, expand=True, padx=4, pady=4)
+        textbox.configure(state="disabled")
+        return textbox
 
     def setup_bindings(self):
         self.root.bind_all("<KeyPress-Control_L>", self.on_ctrl_press)
@@ -468,15 +492,15 @@ class DictationApp:
         self.root.bind_all("<KeyPress-Shift_R>", self.on_shift_press)
         self.root.bind_all("<KeyRelease-Shift_R>", self.on_shift_release)
 
-    def update_status(self, text, color="#F9FAFB"):
-        self.status_label.config(text=text, fg=color)
+    def update_status(self, text, color=COLOR_TITLE):
+        self.status_label.configure(text=text, text_color=color)
 
     def config_refresh_button(self, **kwargs):
-        button = getattr(self, "refresh_button", None)
+        button = self.refresh_button
         if button is not None and button.winfo_exists():
-            button.config(**kwargs)
+            button.configure(**kwargs)
 
-    def on_engine_selected(self, _event=None):
+    def on_engine_selected(self, _choice=None):
         choice = MODE_CHOICES.get(self.engine_var.get(), "slow")
         if choice == "jira":
             self.set_jira_mode(True)
@@ -485,106 +509,63 @@ class DictationApp:
                 self.set_jira_mode(False, update_engine=False)
             self.select_mode(choice)
 
-    def on_input_selected(self, _event=None):
+    def on_input_selected(self, _choice=None):
         self.set_input_language(LANGUAGE_CHOICES.get(self.input_var.get(), "en"))
 
-    def on_output_selected(self, _event=None):
+    def on_output_selected(self, _choice=None):
         self.set_output_target(LANGUAGE_CHOICES.get(self.output_var.get(), "en"))
-
-    def style_choice_button(self, button, selected, normal_bg, normal_fg, state):
-        if selected:
-            button.config(
-                bg=SELECTED_BG,
-                fg=SELECTED_FG,
-                activebackground="#1F2937",
-                activeforeground=SELECTED_FG,
-                relief=tk.SOLID,
-                bd=3,
-                highlightthickness=3,
-                highlightbackground=SELECTED_RING,
-                highlightcolor=SELECTED_RING,
-                state=state,
-            )
-        else:
-            button.config(
-                bg=normal_bg,
-                fg=normal_fg,
-                activebackground=normal_bg,
-                activeforeground=normal_fg,
-                relief=tk.RAISED,
-                bd=1,
-                highlightthickness=1,
-                highlightbackground=UNSELECTED_RING,
-                highlightcolor=UNSELECTED_RING,
-                state=state,
-            )
 
     def set_mode_button_states(self):
         busy = self.is_recording or self.model_loading or self.refreshing_models or self.generating_jira
-        for key, button in self.mode_buttons.items():
-            state = tk.NORMAL if not busy else tk.DISABLED
-            if self.jira_mode and key != "slow":
-                state = tk.DISABLED
-            mode = MODES[key]
-            self.style_choice_button(button, key == self.mode_key, mode["button_color"], mode["text_color"], state)
-        for key, button in self.input_buttons.items():
-            language = LANGUAGES[key]
-            self.style_choice_button(
-                button,
-                key == self.input_language,
-                language["button_color"],
-                language["text_color"],
-                tk.NORMAL if not busy else tk.DISABLED,
-            )
-        for key, button in self.output_buttons.items():
-            target = OUTPUT_TARGETS[key]
-            self.style_choice_button(
-                button,
-                key == self.output_target,
-                target["button_color"],
-                target["text_color"],
-                tk.NORMAL if not busy else tk.DISABLED,
-            )
-        state = tk.DISABLED if busy else tk.NORMAL
-        combo_state = tk.DISABLED if busy else "readonly"
-        self.engine_combo.config(state=combo_state)
-        self.input_combo.config(state=combo_state)
-        self.output_combo.config(state=combo_state)
-        self.config_refresh_button(state=state)
-        self.save_defaults_button.config(state=state)
-        self.settings_button.config(state=state)
-        self.generate_jira_button.config(state=state)
-        self.clear_notes_button.config(state=state)
-        self.copy_customer_button.config(state=state)
-        self.copy_internal_button.config(state=state)
+        control_state = "disabled" if busy else "normal"
+        self.engine_combo.configure(state=control_state)
+        self.input_combo.configure(state=control_state)
+        self.output_combo.configure(state=control_state)
+        self.config_refresh_button(state=control_state)
+        self.save_defaults_button.configure(state=control_state)
+        self.settings_button.configure(state=control_state)
+        self.generate_jira_button.configure(state=control_state)
+        self.clear_notes_button.configure(state=control_state)
+        self.copy_customer_button.configure(state=control_state)
+        self.copy_internal_button.configure(state=control_state)
 
     def set_hold_button_idle(self):
-        self.hold_button.config(
+        self.hold_button.configure(
             text=self.idle_button_text(),
-            bg="#374151",
-            activebackground="#4B5563",
-            state=tk.NORMAL if not self.model_loading else tk.DISABLED,
+            fg_color=TALK_IDLE,
+            hover_color=TALK_IDLE_HOVER,
+            text_color=TALK_IDLE_TEXT,
+            state="disabled" if self.model_loading else "normal",
         )
 
     def set_hold_button_recording(self):
-        self.hold_button.config(
-            text="LISTENING...\nCLICK TO STOP",
-            bg="#DC2626",
-            activebackground="#EF4444",
-            state=tk.NORMAL,
+        self.hold_button.configure(
+            text="LISTENING...  CLICK TO STOP",
+            fg_color=TALK_REC,
+            hover_color=TALK_REC_HOVER,
+            text_color="#FFFFFF",
+            state="normal",
+        )
+
+    def set_hold_button_busy(self, text, color=TALK_BUSY):
+        self.hold_button.configure(
+            text=text,
+            fg_color=color,
+            text_color="#FFFFFF",
+            state="disabled",
         )
 
     def set_result_text(self, text):
-        self.result_text.config(state=tk.NORMAL)
-        self.result_text.delete("1.0", tk.END)
-        self.result_text.insert(tk.END, text)
-        self.result_text.config(state=tk.DISABLED)
+        self.result_text.configure(state="normal")
+        self.result_text.delete("1.0", "end")
+        self.result_text.insert("end", text)
+        self.result_text.configure(state="disabled")
 
     def set_text_widget(self, widget, text):
-        widget.config(state=tk.NORMAL)
-        widget.delete("1.0", tk.END)
-        widget.insert(tk.END, text)
-        widget.config(state=tk.DISABLED)
+        widget.configure(state="normal")
+        widget.delete("1.0", "end")
+        widget.insert("end", text)
+        widget.configure(state="disabled")
 
     def set_jira_text(self, customer_comment, internal_note):
         self.set_text_widget(self.customer_text, customer_comment)
@@ -594,23 +575,23 @@ class DictationApp:
         self.set_text_widget(self.raw_notes_text, "\n\n".join(self.jira_raw_notes))
 
     def copy_customer_comment(self):
-        text = self.customer_text.get("1.0", tk.END).strip()
+        text = self.customer_text.get("1.0", "end").strip()
         if text:
             self.copy_to_clipboard(text)
-            self.update_status("Customer Comment copied.", "#34D399")
+            self.update_status("Customer Comment copied.", COLOR_OK)
 
     def copy_internal_note(self):
-        text = self.internal_text.get("1.0", tk.END).strip()
+        text = self.internal_text.get("1.0", "end").strip()
         if text:
             self.copy_to_clipboard(text)
-            self.update_status("Internal Note copied.", "#34D399")
+            self.update_status("Internal Note copied.", COLOR_OK)
 
     def clear_jira_notes(self):
         self.jira_raw_notes = []
         self.refresh_raw_notes_text()
         self.set_jira_text("", "")
-        self.jira_notebook.select(self.raw_notes_tab)
-        self.update_status("JIRA notes cleared.", "#34D399")
+        self.jira_tabs.set("Raw Notes")
+        self.update_status("JIRA notes cleared.", COLOR_OK)
 
     def add_jira_note(self, text):
         note = text.strip()
@@ -618,23 +599,23 @@ class DictationApp:
             return
         self.jira_raw_notes.append(note)
         self.refresh_raw_notes_text()
-        self.jira_notebook.select(self.raw_notes_tab)
+        self.jira_tabs.set("Raw Notes")
 
     def generate_jira_from_notes(self):
         if self.is_recording or self.model_loading or self.refreshing_models or self.generating_jira:
             return
         notes = "\n\n".join(self.jira_raw_notes).strip()
         if not notes:
-            self.update_status("No Raw Notes to generate JIRA output.", "#FBBF24")
+            self.update_status("No Raw Notes to generate JIRA output.", COLOR_WARN)
             return
         if not self.get_openai_api_key():
-            self.update_status("JIRA MODE requires an OpenAI API key. Open Settings.", "#FBBF24")
+            self.update_status("JIRA MODE requires an OpenAI API key. Open Settings.", COLOR_WARN)
             return
 
         self.generating_jira = True
         self.set_mode_button_states()
-        self.hold_button.config(text="GENERATING JIRA...", bg="#1D4ED8", state=tk.DISABLED)
-        self.update_status("Generating Customer Comment and Internal Note...", "#60A5FA")
+        self.set_hold_button_busy("GENERATING JIRA...")
+        self.update_status("Generating Customer Comment and Internal Note...", COLOR_INFO)
         threading.Thread(target=self.generate_jira_worker, args=(notes,), daemon=True).start()
 
     def generate_jira_worker(self, notes):
@@ -654,24 +635,24 @@ class DictationApp:
     def finish_generate_jira(self, customer_comment, internal_note, elapsed):
         self.generating_jira = False
         self.set_jira_text(customer_comment, internal_note)
-        self.jira_notebook.select(self.customer_tab)
+        self.jira_tabs.set("Customer")
         self.set_mode_button_states()
         self.set_hold_button_idle()
-        self.update_status(f"Customer Comment copied in {elapsed:.1f}s.", "#34D399")
+        self.update_status(f"Customer Comment copied in {elapsed:.1f}s.", COLOR_OK)
 
     def fail_generate_jira(self, error_text):
         self.generating_jira = False
         self.set_mode_button_states()
         self.set_hold_button_idle()
-        self.update_status(f"JIRA generation error: {error_text}", "#F87171")
+        self.update_status(f"JIRA generation error: {error_text}", COLOR_ERROR)
 
     def refresh_output_panel(self):
         if self.jira_mode:
             self.result_text.pack_forget()
-            self.jira_frame.pack(pady=(0, 8))
+            self.jira_frame.pack(fill=tk.BOTH, expand=True, pady=(0, 8))
         else:
             self.jira_frame.pack_forget()
-            self.result_text.pack(pady=(0, 12))
+            self.result_text.pack(fill=tk.BOTH, expand=True, padx=4, pady=(0, 8))
 
     def select_mode(self, mode_key):
         if self.is_recording or self.model_loading:
@@ -683,7 +664,7 @@ class DictationApp:
         if hasattr(self, "engine_var"):
             self.engine_var.set("Jira Mode" if self.jira_mode else MODE_LABELS.get(mode_key, "API"))
         self.root.title(f"{APP_NAME} {APP_VERSION} - {self.mode['label']}")
-        self.route_label.config(text=self.current_route_status())
+        self.route_label.configure(text=self.current_route_status())
         self.refresh_defaults_label()
         self.set_mode_button_states()
         self.ensure_model_loaded_async(mode_key)
@@ -695,13 +676,13 @@ class DictationApp:
         if update_engine:
             self.engine_var.set("Jira Mode" if enabled else MODE_LABELS.get(self.mode_key, "API"))
         self.refresh_output_panel()
-        self.route_label.config(text=self.current_route_status())
+        self.route_label.configure(text=self.current_route_status())
         self.refresh_defaults_label()
         self.set_hold_button_idle()
         self.set_mode_button_states()
         if enabled:
             if not self.get_openai_api_key():
-                self.update_status("JIRA MODE requires an OpenAI API key. Open Settings.", "#FBBF24")
+                self.update_status("JIRA MODE requires an OpenAI API key. Open Settings.", COLOR_WARN)
             if self.mode_key != "slow":
                 self.select_mode("slow")
 
@@ -715,7 +696,7 @@ class DictationApp:
         if hasattr(self, "input_var"):
             self.input_var.set(LANGUAGE_LABELS.get(language_key, "English"))
         if update_status:
-            self.route_label.config(text=self.current_route_status())
+            self.route_label.configure(text=self.current_route_status())
         self.refresh_defaults_label()
         self.set_mode_button_states()
 
@@ -726,7 +707,7 @@ class DictationApp:
         if hasattr(self, "output_var"):
             self.output_var.set(LANGUAGE_LABELS.get(target_key, "English"))
         if update_status:
-            self.route_label.config(text=self.current_route_status())
+            self.route_label.configure(text=self.current_route_status())
         self.refresh_defaults_label()
         self.set_mode_button_states()
 
@@ -735,14 +716,14 @@ class DictationApp:
         input_label = LANGUAGES.get(self.default_input_language, LANGUAGES["en"])["label"]
         output_label = OUTPUT_TARGETS.get(self.default_output_target, OUTPUT_TARGETS["en"])["label"]
         jira_label = " + JIRA" if self.default_jira_mode else ""
-        self.defaults_label.config(text=f"Default: {default_mode_label} + {input_label} -> {output_label}{jira_label}")
+        self.defaults_label.configure(text=f"Default: {default_mode_label} + {input_label} → {output_label}{jira_label}")
 
     def idle_button_text(self):
         if self.jira_mode:
-            return "ADD NOTE\nJIRA MODE"
+            return "ADD NOTE  ·  JIRA MODE"
         if self.silence_timeout_seconds() is None:
-            return "PRESS TO TALK\nClick again to stop"
-        return "PRESS TO TALK\nAuto-stops after silence"
+            return "PRESS TO TALK  ·  click again to stop"
+        return "PRESS TO TALK  ·  auto-stops on silence"
 
     def current_route_status(self):
         input_name = LANGUAGES[self.input_language]["name"]
@@ -817,7 +798,7 @@ class DictationApp:
         jira_label = " + JIRA" if self.jira_mode else ""
         self.update_status(
             f"Default saved: {self.mode['label']} + {self.input_language.upper()} -> {self.output_target.upper()}{jira_label}",
-            "#34D399",
+            COLOR_OK,
         )
 
     def silence_timeout_seconds(self):
@@ -833,122 +814,131 @@ class DictationApp:
         if self.is_recording or self.model_loading or self.refreshing_models:
             return
 
-        dialog = tk.Toplevel(self.root)
+        dialog = ctk.CTkToplevel(self.root)
         dialog.title("BananaPhone Settings")
-        dialog.geometry("500x330")
-        dialog.configure(bg="#111827")
+        dialog.geometry("480x420")
+        dialog.configure(fg_color=COLOR_WINDOW)
         dialog.transient(self.root)
-        dialog.grab_set()
+        dialog.after(50, dialog.grab_set)
 
-        tk.Label(
-            dialog,
+        body = ctk.CTkFrame(dialog, fg_color="transparent")
+        body.pack(fill=tk.BOTH, expand=True, padx=22, pady=20)
+
+        ctk.CTkLabel(
+            body,
             text="Silence timeout",
-            font=("Helvetica", 10, "bold"),
-            fg="#F9FAFB",
-            bg="#111827",
-        ).pack(anchor="w", padx=18, pady=(18, 6))
+            font=ctk.CTkFont(size=13, weight="bold"),
+            text_color=COLOR_TITLE,
+        ).pack(anchor="w")
 
         silence_var = tk.StringVar(value=self.silence_timeout_setting)
-        timeout_frame = tk.Frame(dialog, bg="#111827")
-        timeout_frame.pack(anchor="w", padx=18, pady=(0, 14))
+        timeout_frame = ctk.CTkFrame(body, fg_color="transparent")
+        timeout_frame.pack(anchor="w", pady=(6, 16))
         for value, label in (("4", "4s"), ("7", "7s"), ("10", "10s"), ("off", "Off")):
-            tk.Radiobutton(
+            ctk.CTkRadioButton(
                 timeout_frame,
                 text=label,
                 value=value,
                 variable=silence_var,
-                font=("Helvetica", 10),
-                fg="#F9FAFB",
-                bg="#111827",
-                selectcolor="#1F2937",
-                activebackground="#111827",
-                activeforeground="#F9FAFB",
-            ).pack(side=tk.LEFT, padx=(0, 12))
+                font=ctk.CTkFont(size=12),
+                fg_color=BTN_PRIMARY,
+                hover_color=BTN_PRIMARY_HOVER,
+            ).pack(side=tk.LEFT, padx=(0, 14))
 
-        tk.Label(
-            dialog,
+        ctk.CTkLabel(
+            body,
             text="OpenAI API key",
-            font=("Helvetica", 10, "bold"),
-            fg="#F9FAFB",
-            bg="#111827",
-        ).pack(anchor="w", padx=18, pady=(0, 6))
+            font=ctk.CTkFont(size=13, weight="bold"),
+            text_color=COLOR_TITLE,
+        ).pack(anchor="w")
 
         key_var = tk.StringVar(value=self.configured_api_key)
-        key_entry = tk.Entry(dialog, textvariable=key_var, show="*", width=58, font=("Helvetica", 10))
-        key_entry.pack(anchor="w", padx=18, pady=(0, 8))
-
-        hint = tk.Label(
-            dialog,
-            text="Stored only in ~/.config/bananafone/settings_v2.json. Env/file fallback still works.",
-            font=("Helvetica", 9),
-            fg="#9CA3AF",
-            bg="#111827",
-            wraplength=440,
+        key_entry = ctk.CTkEntry(
+            body,
+            textvariable=key_var,
+            show="*",
+            font=ctk.CTkFont(size=12),
+            fg_color=COLOR_FIELD,
+            border_color=COLOR_CARD_BORDER,
+            corner_radius=8,
         )
-        hint.pack(anchor="w", padx=18, pady=(0, 18))
+        key_entry.pack(fill=tk.X, pady=(6, 4))
 
-        tk.Label(
-            dialog,
+        ctk.CTkLabel(
+            body,
+            text="Stored only in ~/.config/bananafone/settings_v2.json. Env/file fallback still works.",
+            font=ctk.CTkFont(size=11),
+            text_color=COLOR_SUBTLE,
+            wraplength=430,
+            justify="left",
+        ).pack(anchor="w", pady=(0, 16))
+
+        ctk.CTkLabel(
+            body,
             text="Local models",
-            font=("Helvetica", 10, "bold"),
-            fg="#F9FAFB",
-            bg="#111827",
-        ).pack(anchor="w", padx=18, pady=(0, 6))
+            font=ctk.CTkFont(size=13, weight="bold"),
+            text_color=COLOR_TITLE,
+        ).pack(anchor="w")
 
-        models_frame = tk.Frame(dialog, bg="#111827")
-        models_frame.pack(anchor="w", padx=18, pady=(0, 18))
-
-        self.refresh_button = tk.Button(
-            models_frame,
+        self.refresh_button = ctk.CTkButton(
+            body,
             text="Download Models",
-            font=("Helvetica", 10, "bold"),
-            bg="#E5E7EB",
-            fg="black",
+            font=ctk.CTkFont(size=12, weight="bold"),
+            height=32,
+            corner_radius=10,
+            fg_color=BTN_NEUTRAL,
+            hover_color=BTN_NEUTRAL_HOVER,
             command=self.refresh_models,
         )
-        self.refresh_button.pack(side=tk.LEFT)
+        self.refresh_button.pack(anchor="w", pady=(6, 18))
 
-        buttons = tk.Frame(dialog, bg="#111827")
-        buttons.pack(anchor="e", padx=18)
+        buttons = ctk.CTkFrame(body, fg_color="transparent")
+        buttons.pack(side=tk.BOTTOM, anchor="e")
 
         def save_settings():
             self.silence_timeout_setting = silence_var.get()
             self.configured_api_key = key_var.get().strip()
             self.write_settings()
-            self.route_label.config(text=self.current_route_status())
+            self.route_label.configure(text=self.current_route_status())
             self.set_hold_button_idle()
-            self.update_status("Settings saved.", "#34D399")
+            self.update_status("Settings saved.", COLOR_OK)
             dialog.destroy()
             if self.mode.get("backend") == "openai" and self.model is None:
                 self.ensure_model_loaded_async(self.mode_key)
 
-        tk.Button(
+        ctk.CTkButton(
             buttons,
             text="Cancel",
-            font=("Helvetica", 10, "bold"),
-            bg="#E5E7EB",
-            fg="black",
+            width=90,
+            font=ctk.CTkFont(size=12, weight="bold"),
+            height=34,
+            corner_radius=10,
+            fg_color=BTN_NEUTRAL,
+            hover_color=BTN_NEUTRAL_HOVER,
             command=dialog.destroy,
         ).pack(side=tk.LEFT, padx=(0, 8))
-        tk.Button(
+        ctk.CTkButton(
             buttons,
             text="Save",
-            font=("Helvetica", 10, "bold"),
-            bg="#D1FAE5",
-            fg="black",
+            width=90,
+            font=ctk.CTkFont(size=12, weight="bold"),
+            height=34,
+            corner_radius=10,
+            fg_color=BTN_GOOD,
+            hover_color=BTN_GOOD_HOVER,
             command=save_settings,
         ).pack(side=tk.LEFT)
 
     def ensure_model_loaded_async(self, mode_key):
         if self.model_key_loaded == mode_key and self.model is not None:
-            self.update_status(f"{self.mode['label']} mode ready.", "#34D399")
+            self.update_status(f"{self.mode['label']} mode ready.", COLOR_OK)
             self.set_hold_button_idle()
             self.refresh_cache_status()
             return
 
         self.model_loading = True
-        self.update_status(f"Loading {MODES[mode_key]['label']} mode...", "#FBBF24")
-        self.hold_button.config(text="LOADING...\nlocal suffering", bg="#6B7280", state=tk.DISABLED)
+        self.update_status(f"Loading {MODES[mode_key]['label']} mode...", COLOR_WARN)
+        self.set_hold_button_busy("LOADING...", TALK_LOADING)
         self.set_mode_button_states()
         threading.Thread(target=self.load_mode_resources, args=(mode_key,), daemon=True).start()
 
@@ -958,7 +948,7 @@ class DictationApp:
             started = time.time()
             source = sr.Microphone()
             with source as mic_source:
-                self.root.after(0, self.update_status, "Calibrating ambient noise...", "#FBBF24")
+                self.root.after(0, self.update_status, "Calibrating ambient noise...", COLOR_WARN)
                 self.recognizer.adjust_for_ambient_noise(
                     mic_source,
                     duration=mode["ambient_duration"],
@@ -992,13 +982,13 @@ class DictationApp:
         self.set_mode_button_states()
         self.set_hold_button_idle()
         self.refresh_cache_status()
-        self.update_status(f"{self.mode['label']} mode ready in {elapsed:.1f}s.", "#34D399")
+        self.update_status(f"{self.mode['label']} mode ready in {elapsed:.1f}s.", COLOR_OK)
 
     def fail_loading_mode(self, error_text):
         self.model_loading = False
         self.set_mode_button_states()
-        self.hold_button.config(text="LOAD ERROR\ncheck the log", bg="#7F1D1D", state=tk.DISABLED)
-        self.update_status(f"Load error: {error_text}", "#F87171")
+        self.set_hold_button_busy("LOAD ERROR · check the log", TALK_FAIL)
+        self.update_status(f"Load error: {error_text}", COLOR_ERROR)
 
     def on_main_button_click(self):
         if self.is_recording:
@@ -1048,7 +1038,7 @@ class DictationApp:
             status = f"Recording in {self.mode['label']} mode. Click again to stop."
         else:
             status = f"Recording in {self.mode['label']} mode. Auto-stops after {timeout:.0f}s of silence."
-        self.update_status(status, "#34D399")
+        self.update_status(status, COLOR_OK)
         self.recording_thread = threading.Thread(target=self.capture_audio_loop, daemon=True)
         self.recording_thread.start()
 
@@ -1060,8 +1050,8 @@ class DictationApp:
         self.stop_requested = True
         self.hotkey_recording = False
 
-        self.hold_button.config(text="TRANSCRIBING...", bg="#1D4ED8", state=tk.DISABLED)
-        self.update_status(f"Transcribing with {self.mode['label']} mode...", "#60A5FA")
+        self.set_hold_button_busy("TRANSCRIBING...")
+        self.update_status(f"Transcribing with {self.mode['label']} mode...", COLOR_INFO)
         self.transcription_thread = threading.Thread(target=self.process_audio, daemon=True)
         self.transcription_thread.start()
 
@@ -1141,7 +1131,7 @@ class DictationApp:
     def after_no_audio(self):
         self.set_mode_button_states()
         self.set_hold_button_idle()
-        self.update_status("No audio captured. Try again.", "#F87171")
+        self.update_status("No audio captured. Try again.", COLOR_ERROR)
 
     def after_transcription_success(self, text, elapsed, language_probability):
         confidence = f"{language_probability:.2f}" if language_probability is not None else "n/a"
@@ -1159,13 +1149,13 @@ class DictationApp:
         self.set_hold_button_idle()
         self.update_status(
             f"{copied_label} in {elapsed:.1f}s. {source_label} confidence: {confidence}",
-            "#34D399",
+            COLOR_OK,
         )
 
     def after_transcription_error(self, error_text):
         self.set_mode_button_states()
         self.set_hold_button_idle()
-        self.update_status(error_text, "#F87171")
+        self.update_status(error_text, COLOR_ERROR)
 
     def handle_capture_failure(self, error_text):
         self.is_recording = False
@@ -1174,7 +1164,7 @@ class DictationApp:
         self.audio_chunks = []
         self.set_mode_button_states()
         self.set_hold_button_idle()
-        self.update_status(error_text, "#F87171")
+        self.update_status(error_text, COLOR_ERROR)
 
     def get_model_cache_path(self, model_name):
         return os.path.join(HF_CACHE_DIR, f"models--Systran--faster-whisper-{model_name}")
@@ -1185,15 +1175,15 @@ class DictationApp:
     def refresh_cache_status(self):
         small = "ok" if self.is_model_cached("small") else "missing"
         medium = "ok" if self.is_model_cached("medium") else "missing"
-        self.cache_label.config(text=f"Models: small {small} | medium {medium} | API cloud")
+        self.cache_label.configure(text=f"Models: small {small} | medium {medium} | API cloud")
 
     def refresh_models(self):
         if self.model_loading or self.is_recording or self.refreshing_models:
             return
 
         self.refreshing_models = True
-        self.config_refresh_button(state=tk.DISABLED, text="Downloading...")
-        self.update_status("Downloading or updating local models...", "#FBBF24")
+        self.config_refresh_button(state="disabled", text="Downloading...")
+        self.update_status("Downloading or updating local models...", COLOR_WARN)
         threading.Thread(target=self.refresh_models_worker, daemon=True).start()
 
     def refresh_models_worker(self):
@@ -1451,16 +1441,16 @@ class DictationApp:
 
     def finish_refresh_models(self, results):
         self.refreshing_models = False
-        self.config_refresh_button(state=tk.NORMAL, text="Download Models")
+        self.config_refresh_button(state="normal", text="Download Models")
         self.refresh_cache_status()
-        self.update_status(f"Models ready: {', '.join(results)}", "#34D399")
+        self.update_status(f"Models ready: {', '.join(results)}", COLOR_OK)
         self.set_mode_button_states()
 
     def fail_refresh_models(self, error_text):
         self.refreshing_models = False
-        self.config_refresh_button(state=tk.NORMAL, text="Download Models")
+        self.config_refresh_button(state="normal", text="Download Models")
         self.refresh_cache_status()
-        self.update_status(f"Download/update failed: {error_text}", "#F87171")
+        self.update_status(f"Download/update failed: {error_text}", COLOR_ERROR)
         self.set_mode_button_states()
 
     def copy_to_clipboard(self, text):
@@ -1488,7 +1478,9 @@ class DictationApp:
 
 if __name__ == "__main__":
     try:
-        root = tk.Tk()
+        ctk.set_appearance_mode("dark")
+        ctk.set_default_color_theme("dark-blue")
+        root = ctk.CTk()
         app = DictationApp(root)
         root.mainloop()
     except Exception:
