@@ -4,6 +4,10 @@ Private experimental dictation app with explicit input/output language routing a
 
 This repository is the canonical BananaPhone v2 workspace.
 
+![BananaPhone v2 UI](docs/bananaphone-v2-ui.png)
+
+The GUI uses [CustomTkinter](https://github.com/TomSchimansky/CustomTkinter) (dark theme, rounded controls, tabbed Jira panel).
+
 ## Start Here
 
 For AI handoff and project rules, read:
@@ -32,6 +36,26 @@ The original v1 README was moved to:
 
 ```text
 README_V1.md
+```
+
+## Install
+
+Linux:
+
+```bash
+./install.sh
+```
+
+Windows (PowerShell):
+
+```powershell
+.\install_windows.ps1
+```
+
+Windows standalone `.exe` (run on a machine without Python) — see [README_WINDOWS.md](README_WINDOWS.md):
+
+```powershell
+.\build_windows_exe.ps1
 ```
 
 ## Run

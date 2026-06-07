@@ -2,12 +2,29 @@
 
 Experimental parallel version. It does not replace `bananafone.py`.
 
+![BananaPhone v2 UI](docs/bananaphone-v2-ui.png)
+
+The GUI was redesigned with [CustomTkinter](https://github.com/TomSchimansky/CustomTkinter):
+rounded controls, a dark theme, a compact route card, and a tabbed Jira panel.
+
 Functional snapshot:
 
 - [`docs/bananaphone-v2-current-state.md`](docs/bananaphone-v2-current-state.md)
 - [`docs/bananaphone-v2.1-observations.md`](docs/bananaphone-v2.1-observations.md)
 
-Run it with:
+Install (Linux):
+
+```bash
+./install.sh
+```
+
+Install (Windows):
+
+```powershell
+.\install_windows.ps1
+```
+
+Run it directly:
 
 ```bash
 ./.venv/bin/python bananaphone_v2.py
@@ -33,10 +50,9 @@ python3 -m py_compile bananaphone_v2.py
   - local model download/update
 - Separate settings file: `~/.config/bananafone/settings_v2.json`
 - Separate log file: `~/.local/state/bananafone/bananaphone_v2.log`
-
-## Not included yet
-
-- v2 installer or launcher
+- Modern CustomTkinter dark UI
+- Linux launcher (`install.sh`) and Windows launcher (`install_windows.ps1`)
+- Optional standalone Windows `.exe` build (`build_windows_exe.ps1`)
 
 ## Behavior
 

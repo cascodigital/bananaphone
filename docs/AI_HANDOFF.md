@@ -88,24 +88,23 @@ Preserve all of this:
 
 ## Current UI Direction
 
-The functionality is strong. The GUI is not yet polished enough for public release.
+DONE (2026-06-07): the GUI was redesigned with `customtkinter`. The old default
+Tkinter/`ttk` look is gone. See `docs/bananaphone-v2-ui.png`.
 
-Next UI work should make it feel like a modern utility app:
+Implemented:
 
-- less default Tkinter/Linux 2010 visual style
-- fewer loose buttons
-- clearer visual hierarchy
-- cleaner route controls
-- better Jira panel layout
-- less dead dark space
+- `customtkinter` dark theme, rounded controls
+- compact route card with `CTkOptionMenu` for Engine / Input / Output
+- large accent talk button (amber idle, red recording)
+- Jira panel as a `CTkTabview` (Raw Notes / Customer / Internal)
+- `CTkToplevel` settings window
+- new dependency: `customtkinter>=5.2.2` (in `requirements.txt`)
 
-Possible options:
+Palette lives in the color constants at the top of `bananaphone_v2.py`
+(`COLOR_*`, `TALK_*`, `BTN_*`). Tweak there for visual changes.
 
-- continue Tkinter but build custom controls instead of default `ttk.Combobox`
-- use `customtkinter`
-- build a lightweight local web UI while keeping the Python backend
-
-Do not choose a new UI framework without explaining tradeoffs first.
+If a further UI framework change is ever considered (e.g. a local web UI),
+explain the tradeoffs first. Current direction is to stay on customtkinter.
 
 ## Deferred Decisions
 
@@ -124,9 +123,11 @@ Other deferred items:
 - persist last normal result
 - persist pending Jira raw notes
 - restore/discard pending Jira notes on startup
-- install/launcher packaging for v2
 - public release/donation flow
 - privacy documentation
+
+Done: install/launcher packaging for v2 (`install.sh`, `install_windows.ps1`,
+`build_windows_exe.ps1`).
 
 ## Validation
 

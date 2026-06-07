@@ -4,7 +4,7 @@ set -euo pipefail
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 VENV_DIR="$REPO_DIR/.venv"
 DESKTOP_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/applications"
-DESKTOP_FILE="$DESKTOP_DIR/bananafone.desktop"
+DESKTOP_FILE="$DESKTOP_DIR/bananaphone-v2.desktop"
 
 mkdir -p "$DESKTOP_DIR"
 
@@ -17,10 +17,10 @@ fi
 
 cat > "$DESKTOP_FILE" <<EOF
 [Desktop Entry]
-Version=1.4
-Name=Bananafone
-Comment=Ditado local e via API para Linux
-Exec=$VENV_DIR/bin/python $REPO_DIR/bananafone.py
+Version=2.1
+Name=BananaPhone v2
+Comment=Dictation and Jira documentation (local + API)
+Exec=$VENV_DIR/bin/python $REPO_DIR/bananaphone_v2.py
 Icon=audio-input-microphone
 Terminal=false
 Type=Application
@@ -29,6 +29,6 @@ EOF
 
 chmod +x "$DESKTOP_FILE"
 
-echo "Bananafone instalado."
+echo "BananaPhone v2 installed."
 echo "Launcher: $DESKTOP_FILE"
-echo "Exec: $VENV_DIR/bin/python $REPO_DIR/bananafone.py"
+echo "Exec: $VENV_DIR/bin/python $REPO_DIR/bananaphone_v2.py"

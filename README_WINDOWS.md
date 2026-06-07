@@ -1,105 +1,123 @@
-# Bananafone no Windows
+# BananaPhone v2 on Windows
 
-Versao atual do pacote: `1.4`
+Same engine as Linux: PyAudio capture, local `faster-whisper` transcription or
+cloud `API` mode via OpenAI, plus `JIRA MODE`. The UI is CustomTkinter (dark,
+rounded controls).
 
-Port minimo suportado: mesma interface Tkinter, captura pelo PyAudio,
-transcricao local via `faster-whisper` ou modo `API` via OpenAI.
+Two ways to run on Windows:
 
-O fluxo padrao e: falar em portugues brasileiro e receber texto em ingles
-(`PT -> EN`).
-Tambem ha `PT -> PT`, `EN -> EN` e `EN -> PT`.
-Agora o app tem um botao `Tornar atual o padrao` para salvar a combinacao
-atual de modo (`Fast`, `Normal`, `API`) e fluxo de idioma.
-No Windows, isso fica salvo em `%USERPROFILE%\\.config\\bananafone\\settings.json`.
+1. **Python venv + shortcut** (fastest to set up, recommended for your own machine)
+2. **Standalone `.exe`** (no Python needed on the target machine, good for handing over)
 
-## Instalar
+---
 
-No PowerShell:
+## Option 1 — Install with Python (venv + shortcut)
+
+Requires Python 3.10+ from [python.org](https://www.python.org/downloads/) with
+**"Add python.exe to PATH"** ticked.
+
+In PowerShell:
 
 ```powershell
-cd caminho\para\bananafone
-Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
+cd path\to\bananaphone_v2
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 .\install_windows.ps1
 ```
 
-O instalador cria:
+The installer creates:
 
-- `.venv`
-- dependencias Python
-- atalho `Bananafone.lnk` na Area de Trabalho
-- atalho apontando para `pythonw.exe` quando disponivel, para nao deixar uma janela
-  preta aberta junto com o app
+- `.venv` with all dependencies (including `customtkinter`)
+- a **Desktop** shortcut `BananaPhone.lnk`
+- a **Start Menu** shortcut under `BananaPhone`
+- shortcuts target `pythonw.exe` so there is **no black console window**
 
-## Chave da API
+Then just double-click the Desktop shortcut.
 
-Jeito recomendado, sem gravar a chave no script:
+### API key
+
+Recommended, without writing the key into any script:
 
 ```powershell
 .\install_windows.ps1 -PromptForKey
 ```
 
-Ou passando a chave direto:
+Or pass it directly:
 
 ```powershell
 .\install_windows.ps1 -OpenAIKey "sk-..."
 ```
 
-Para uso pessoal, pode existir um `install_windows_private.ps1` com chave
-embutida. Esse arquivo fica ignorado pelo Git e nao deve ser commitado.
+You can also leave it blank and set it later inside the app's **Settings** window.
 
-O modo `API` procura a chave nesta ordem:
+`API` / `JIRA MODE` look for the key in this order:
 
-1. variavel `OPENAI_API_KEY`
-2. arquivo apontado por `BANANAFONE_OPENAI_KEY_FILE`
-3. `%USERPROFILE%\ai\config\ai-keys.md`
-4. `%USERPROFILE%\.config\bananafone\ai-keys.md`
+1. environment variable `OPENAI_API_KEY`
+2. the app Settings value (stored in `settings_v2.json`)
+3. file pointed to by `BANANAFONE_OPENAI_KEY_FILE`
+4. `%USERPROFILE%\ai\config\ai-keys.md`
+5. `%USERPROFILE%\.config\bananafone\ai-keys.md`
 
-Formato aceito no arquivo:
+File format:
 
 ```md
-- **OpenAI (Speech):** `sua-chave-aqui`
+- **OpenAI (Speech):** `your-key-here`
 ```
 
-## Rodar sem instalar atalho
+### Run without the shortcut
 
 ```powershell
-.\.venv\Scripts\python.exe .\bananafone.py
+.\.venv\Scripts\pythonw.exe .\bananaphone_v2.py
 ```
 
-Se quiser abrir sem console tambem no manual, use:
+### Update
 
 ```powershell
-.\.venv\Scripts\pythonw.exe .\bananafone.py
-```
-
-## Atualizar
-
-Pode instalar por cima, no mesmo diretório.
-
-Fluxo recomendado:
-
-```powershell
-cd caminho\para\bananafone
+cd path\to\bananaphone_v2
 git pull
 .\install_windows.ps1
 ```
 
-Se voce usa o instalador privado com chave embutida:
+Reuses the existing `.venv`, updates dependencies, and recreates the shortcuts.
+
+---
+
+## Option 2 — Build a standalone `.exe`
+
+Use this to run on a Windows machine that has **no Python installed**.
+The build must run **on Windows** (a Windows `.exe` cannot be cross-compiled
+from Linux).
 
 ```powershell
-cd caminho\para\bananafone
-git pull
-.\install_windows_private.ps1
+cd path\to\bananaphone_v2
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+.\install_windows.ps1          # if you have not set up the venv yet
+.\build_windows_exe.ps1        # one-folder build (recommended)
 ```
 
-Isso reutiliza a `.venv`, atualiza dependencias se preciso e recria o atalho.
-Nao precisa desinstalar antes.
+Output:
 
-## Observacoes
+- one-folder: `dist\BananaPhone\BananaPhone.exe` — zip the whole `BananaPhone` folder to share it
+- one-file (`.\build_windows_exe.ps1 -OneFile`): `dist\BananaPhone.exe` — a single file, slower first launch
 
-- O clipboard usa `Set-Clipboard` nativo do PowerShell.
-- O hotkey `Ctrl+Shift` continua sendo da janela focada, nao global.
-- `PT -> EN` e `EN -> PT` usam OpenAI para converter a transcricao antes de copiar.
-- `PT -> PT` e `EN -> EN` copiam a transcricao diretamente.
-- Se `PyAudio` falhar ao instalar, atualize Python/pip primeiro. Em Windows
-  moderno com Python 3.10+ normalmente instala por wheel.
+The build bundles `customtkinter`, `faster-whisper`, `ctranslate2` and `av`.
+Local Whisper models (`small` / `medium`) are still downloaded on first use into
+`%USERPROFILE%\.cache\huggingface`. `API` mode needs only an OpenAI key, no model
+download.
+
+---
+
+## Settings and logs (Windows paths)
+
+- settings: `%USERPROFILE%\.config\bananafone\settings_v2.json`
+- log: `%USERPROFILE%\.local\state\bananafone\bananaphone_v2.log`
+
+## Notes
+
+- Clipboard uses native PowerShell `Set-Clipboard`.
+- The `Ctrl+Shift` hotkey works while the window is focused (not global).
+- `PT -> EN` / `EN -> PT` use OpenAI to convert the transcription before copying.
+- `PT -> PT` / `EN -> EN` copy the transcription directly.
+- If `PyAudio` fails to install, update Python/pip first. On modern Windows with
+  Python 3.10+ it normally installs from a wheel.
+- For personal use you may keep an `install_windows_private.ps1` with an embedded
+  key. That file is gitignored and must not be committed.
