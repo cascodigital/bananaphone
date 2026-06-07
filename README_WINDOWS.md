@@ -1,14 +1,15 @@
 # Bananafone no Windows
 
-Versao atual do pacote: `1.3`
+Versao atual do pacote: `1.4`
 
 Port minimo suportado: mesma interface Tkinter, captura pelo PyAudio,
 transcricao local via `faster-whisper` ou modo `API` via OpenAI.
 
-O fluxo padrao e: falar em portugues e receber texto em ingles (`EN`).
-Tambem ha saida `PT-BR` e `PT-PT`; `PT-PT` nao e default.
+O fluxo padrao e: falar em portugues brasileiro e receber texto em ingles
+(`PT -> EN`).
+Tambem ha `PT -> PT`, `EN -> EN` e `EN -> PT`.
 Agora o app tem um botao `Tornar atual o padrao` para salvar a combinacao
-atual de modo (`Fast`, `Normal`, `API`) e saida (`EN`, `PT-BR`, `PT-PT`).
+atual de modo (`Fast`, `Normal`, `API`) e fluxo de idioma.
 No Windows, isso fica salvo em `%USERPROFILE%\\.config\\bananafone\\settings.json`.
 
 ## Instalar
@@ -98,6 +99,7 @@ Nao precisa desinstalar antes.
 
 - O clipboard usa `Set-Clipboard` nativo do PowerShell.
 - O hotkey `Ctrl+Shift` continua sendo da janela focada, nao global.
-- `EN` e `PT-PT` usam OpenAI para converter a transcricao antes de copiar.
+- `PT -> EN` e `EN -> PT` usam OpenAI para converter a transcricao antes de copiar.
+- `PT -> PT` e `EN -> EN` copiam a transcricao diretamente.
 - Se `PyAudio` falhar ao instalar, atualize Python/pip primeiro. Em Windows
   moderno com Python 3.10+ normalmente instala por wheel.

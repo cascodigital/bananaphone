@@ -20,7 +20,7 @@ import speech_recognition as sr
 from faster_whisper import WhisperModel
 
 APP_NAME = "Bananafone"
-APP_VERSION = "1.3"
+APP_VERSION = "1.4"
 CPU_THREADS = min(os.cpu_count() or 4, 8)
 LOG_DIR = os.path.expanduser("~/.local/state/bananafone")
 LOG_FILE = os.path.join(LOG_DIR, "bananafone.log")
@@ -95,29 +95,48 @@ MODES = {
         "backend": "openai",
         "api_model": DEFAULT_OPENAI_MODEL,
         "ambient_duration": 0.75,
-        "prompt": "Transcreva em pt-BR com foco em fidelidade de numeros, horarios, nomes e termos tecnicos.",
+        "prompt": "Transcreva com foco em fidelidade de numeros, horarios, nomes e termos tecnicos.",
     },
 }
 
-OUTPUT_TARGETS = {
-    "en": {
-        "label": "EN",
-        "status": "Saida em ingles natural.",
+OUTPUT_ROUTES = {
+    "pt_to_en": {
+        "label": "PT -> EN",
+        "status": "Fale em portugues brasileiro. Copia em ingles natural.",
+        "source_language": "pt",
+        "target_language": "en",
+        "button_color": "#DBEAFE",
+        "text_color": "black",
+    },
+    "pt_to_pt": {
+        "label": "PT -> PT",
+        "status": "Fale em portugues brasileiro. Copia em portugues brasileiro.",
+        "source_language": "pt",
+        "target_language": "pt",
+        "button_color": "#D1FAE5",
+        "text_color": "black",
+    },
+    "en_to_en": {
+        "label": "EN -> EN",
+        "status": "Speak English. Copies clean English.",
+        "source_language": "en",
+        "target_language": "en",
         "button_color": "#E5E7EB",
         "text_color": "black",
     },
-    "pt-BR": {
-        "label": "PT-BR",
-        "status": "Saida em portugues brasileiro fiel.",
-        "button_color": "#E5E7EB",
+    "en_to_pt": {
+        "label": "EN -> PT",
+        "status": "Speak English. Copies Brazilian Portuguese.",
+        "source_language": "en",
+        "target_language": "pt",
+        "button_color": "#FEF3C7",
         "text_color": "black",
     },
-    "pt-PT": {
-        "label": "PT-PT",
-        "status": "Saida adaptada para portugues de Portugal.",
-        "button_color": "#E5E7EB",
-        "text_color": "black",
-    },
+}
+
+LEGACY_OUTPUT_TARGETS = {
+    "en": "pt_to_en",
+    "pt-BR": "pt_to_pt",
 }
 
 os.makedirs(LOG_DIR, exist_ok=True)
@@ -130,14 +149,14 @@ class DictationApp:
     def __init__(self, root):
         self.root = root
         self.root.title(f"{APP_NAME} {APP_VERSION}")
-        self.root.geometry("520x430")
+        self.root.geometry("560x520")
         self.root.attributes("-topmost", True)
         self.root.configure(bg="#111827")
         self.root.eval("tk::PlaceWindow . center")
 
         self.settings = self.load_settings()
         self.default_mode_key = self.settings.get("default_mode", "slow")
-        self.default_output_target = self.settings.get("default_output", "en")
+        self.default_output_target = self.settings.get("default_output", "pt_to_en")
         self.mode_key = self.default_mode_key
         self.mode = MODES[self.mode_key]
         self.model = None
@@ -186,6 +205,15 @@ class DictationApp:
         )
         self.status_label.pack(pady=(0, 10))
 
+        self.mode_heading = tk.Label(
+            self.root,
+            text="Modo",
+            font=("Helvetica", 10, "bold"),
+            fg="#9CA3AF",
+            bg="#111827",
+        )
+        self.mode_heading.pack(pady=(0, 4))
+
         self.selector_frame = tk.Frame(self.root, bg="#111827")
         self.selector_frame.pack(pady=(0, 10))
 
@@ -204,22 +232,31 @@ class DictationApp:
             button.grid(row=0, column=column, padx=6, pady=4)
             self.mode_buttons[mode_key] = button
 
+        self.route_heading = tk.Label(
+            self.root,
+            text="Fluxo de idioma",
+            font=("Helvetica", 10, "bold"),
+            fg="#9CA3AF",
+            bg="#111827",
+        )
+        self.route_heading.pack(pady=(0, 4))
+
         self.output_frame = tk.Frame(self.root, bg="#111827")
         self.output_frame.pack(pady=(0, 10))
 
         self.output_buttons = {}
-        for column, target_key in enumerate(("en", "pt-BR", "pt-PT")):
-            target = OUTPUT_TARGETS[target_key]
+        for index, target_key in enumerate(("pt_to_en", "pt_to_pt", "en_to_en", "en_to_pt")):
+            target = OUTPUT_ROUTES[target_key]
             button = tk.Button(
                 self.output_frame,
                 text=target["label"],
                 font=("Helvetica", 11, "bold"),
-                width=8,
+                width=12,
                 bg=target["button_color"],
                 fg=target["text_color"],
                 command=lambda key=target_key: self.set_output_target(key),
             )
-            button.grid(row=0, column=column, padx=5, pady=2)
+            button.grid(row=index // 2, column=index % 2, padx=6, pady=4)
             self.output_buttons[target_key] = button
 
         self.tools_frame = tk.Frame(self.root, bg="#111827")
@@ -266,15 +303,15 @@ class DictationApp:
         )
         self.defaults_label.grid(row=0, column=1, padx=6)
 
-        self.mode_label = tk.Label(
+        self.route_label = tk.Label(
             self.root,
             text="Clique para falar. Para sozinho apos silencio. Ctrl+Shift continua no modo segurar.",
             font=("Helvetica", 10),
             fg="#9CA3AF",
             bg="#111827",
-            wraplength=470,
+            wraplength=500,
         )
-        self.mode_label.pack(pady=(0, 12))
+        self.route_label.pack(pady=(0, 12))
 
         self.hold_button = tk.Button(
             self.root,
@@ -292,8 +329,8 @@ class DictationApp:
 
         self.result_text = tk.Text(
             self.root,
-            height=7,
-            width=56,
+            height=6,
+            width=60,
             font=("Helvetica", 10),
             bg="#1F2937",
             fg="#F9FAFB",
@@ -362,25 +399,36 @@ class DictationApp:
         self.mode_key = mode_key
         self.mode = MODES[mode_key]
         self.root.title(f"{APP_NAME} {APP_VERSION} - {self.mode['label']}")
-        self.mode_label.config(text=self.mode["status"])
+        self.route_label.config(text=self.current_route_status())
         self.refresh_defaults_label()
         self.set_mode_button_states()
         self.ensure_model_loaded_async(mode_key)
 
     def set_output_target(self, target_key, update_status=True):
-        if self.is_recording or self.model_loading or target_key not in OUTPUT_TARGETS:
+        if self.is_recording or self.model_loading or target_key not in OUTPUT_ROUTES:
             return
         self.output_target = target_key
-        target = OUTPUT_TARGETS[target_key]
         if update_status:
-            self.mode_label.config(text=target["status"])
+            self.route_label.config(text=self.current_route_status())
         self.refresh_defaults_label()
         self.set_mode_button_states()
 
     def refresh_defaults_label(self):
         default_mode_label = MODES.get(self.default_mode_key, MODES["slow"])["label"]
-        default_output_label = OUTPUT_TARGETS.get(self.default_output_target, OUTPUT_TARGETS["en"])["label"]
+        default_output_label = OUTPUT_ROUTES.get(self.default_output_target, OUTPUT_ROUTES["pt_to_en"])["label"]
         self.defaults_label.config(text=f"Padrao: {default_mode_label} + {default_output_label}")
+
+    def current_route(self):
+        return OUTPUT_ROUTES.get(self.output_target, OUTPUT_ROUTES["pt_to_en"])
+
+    def current_route_status(self):
+        return f"{self.mode['status']} | {self.current_route()['status']}"
+
+    def source_language(self):
+        return self.current_route()["source_language"]
+
+    def target_language(self):
+        return self.current_route()["target_language"]
 
     def load_settings(self):
         if not os.path.isfile(SETTINGS_FILE):
@@ -392,15 +440,18 @@ class DictationApp:
             return {}
 
         default_mode = settings.get("default_mode", "slow")
-        default_output = settings.get("default_output", "en")
+        default_output = self.normalize_output_target(settings.get("default_output", "pt_to_en"))
         if default_mode not in MODES:
             default_mode = "slow"
-        if default_output not in OUTPUT_TARGETS:
-            default_output = "en"
+        if default_output not in OUTPUT_ROUTES:
+            default_output = "pt_to_en"
         return {
             "default_mode": default_mode,
             "default_output": default_output,
         }
+
+    def normalize_output_target(self, target_key):
+        return LEGACY_OUTPUT_TARGETS.get(target_key, target_key)
 
     def write_settings(self):
         settings = {
@@ -416,7 +467,7 @@ class DictationApp:
         self.write_settings()
         self.refresh_defaults_label()
         self.update_status(
-            f"Padrao salvo: {self.mode['label']} + {OUTPUT_TARGETS[self.output_target]['label']}",
+            f"Padrao salvo: {self.mode['label']} + {OUTPUT_ROUTES[self.output_target]['label']}",
             "#34D399",
         )
 
@@ -587,7 +638,9 @@ class DictationApp:
                 text, language_probability = self.transcribe_with_openai(audio_data)
             else:
                 audio_np = np.frombuffer(audio_data, dtype=np.int16).astype(np.float32) / 32768.0
-                segments, info = self.model.transcribe(audio_np, **self.mode["transcribe_kwargs"])
+                transcribe_kwargs = dict(self.mode["transcribe_kwargs"])
+                transcribe_kwargs["language"] = self.source_language()
+                segments, info = self.model.transcribe(audio_np, **transcribe_kwargs)
                 text = " ".join(segment.text.strip() for segment in segments).strip()
                 language_probability = info.language_probability
             if not text:
@@ -611,11 +664,12 @@ class DictationApp:
 
     def after_transcription_success(self, text, elapsed, language_probability):
         confidence = f"{language_probability:.2f}" if language_probability is not None else "n/a"
+        source_label = self.source_language().upper()
         self.set_result_text(text)
         self.set_mode_button_states()
         self.set_hold_button_idle()
         self.update_status(
-            f"Copiado em {elapsed:.1f}s. Confianca PT: {confidence}",
+            f"Copiado em {elapsed:.1f}s. Confianca {source_label}: {confidence}",
             "#34D399",
         )
 
@@ -710,12 +764,18 @@ class DictationApp:
             wav_file.writeframes(pcm_audio)
 
         boundary = f"bananafone-{uuid.uuid4().hex}"
+        source_language = self.source_language()
+        source_label = "Brazilian Portuguese" if source_language == "pt" else "English"
+        prompt = (
+            f"Transcribe {source_label} with high fidelity for numbers, times, names, "
+            "technical terms, and dictated punctuation."
+        )
         body = self.build_multipart_body(
             boundary,
             fields={
                 "model": self.mode["api_model"],
-                "language": "pt",
-                "prompt": self.mode.get("prompt", ""),
+                "language": source_language,
+                "prompt": prompt,
                 "response_format": "json",
                 "temperature": "0",
             },
@@ -744,30 +804,35 @@ class DictationApp:
 
         text = (payload.get("text") or "").strip()
         language = payload.get("language")
-        confidence = 1.0 if language == "pt" else None
+        confidence = 1.0 if language == source_language else None
         return text, confidence
 
     def transform_output_text(self, text):
-        if self.output_target == "pt-BR":
+        source_language = self.source_language()
+        target_language = self.target_language()
+        if source_language == target_language:
             return text
 
         api_key = self.get_openai_api_key()
         if not api_key:
             raise RuntimeError("OPENAI_API_KEY ausente para converter a saida")
 
-        if self.output_target == "pt-PT":
-            system_prompt = (
-                "You convert dictated Brazilian Portuguese into natural European Portuguese. "
-                "Preserve meaning, names, numbers, times, technical terms, and message intent. "
-                "Fix obvious dictation artifacts. Output only the final text."
-            )
-        else:
+        if source_language == "pt" and target_language == "en":
             system_prompt = (
                 "You convert dictated Brazilian Portuguese into natural, professional English. "
                 "Preserve meaning, names, numbers, times, technical terms, and message intent. "
                 "Fix obvious dictation artifacts and produce text a human would actually send. "
                 "Output only the final English text."
             )
+        elif source_language == "en" and target_language == "pt":
+            system_prompt = (
+                "You convert dictated English into natural Brazilian Portuguese. "
+                "Preserve meaning, names, numbers, times, technical terms, and message intent. "
+                "Fix obvious dictation artifacts and produce text a Brazilian human would actually send. "
+                "Output only the final Brazilian Portuguese text."
+            )
+        else:
+            raise RuntimeError(f"Rota de conversao invalida: {source_language}->{target_language}")
 
         payload = {
             "model": DEFAULT_OPENAI_TEXT_MODEL,

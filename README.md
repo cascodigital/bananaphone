@@ -1,6 +1,6 @@
 # Bananafone
 
-Versao atual do pacote: `1.3`
+Versao atual do pacote: `1.4`
 
 Ditado para Linux com dois modos locais e um modo de API, pensado para ficar
 aberto na tela durante o uso diario.
@@ -26,7 +26,7 @@ de alguns segundos de silencio e copia o texto para a area de transferencia.
 - atalho `Ctrl+Shift` com a janela focada no esquema segurar/soltar
 - botao `Baixar / Atualizar modelos` para aquecer ou baixar cache local
 - status visual do cache dos modelos `small` e `medium`
-- seletor de saida: `EN` por padrao, com opcoes `PT-BR` e `PT-PT`
+- seletor de fluxo de idioma: `PT -> EN`, `PT -> PT`, `EN -> EN`, `EN -> PT`
 - botao para salvar o modo e a saida atuais como novo padrao
 - log local em `~/.local/state/bananafone/bananafone.log`
 
@@ -64,9 +64,9 @@ O modo `API` usa a API de transcricao da OpenAI. O app procura a chave nesta ord
 Para trocar o modelo do modo `API`, use `BANANAFONE_OPENAI_MODEL`.
 O padrao atual e `gpt-4o-mini-transcribe`.
 
-A saida padrao e `EN`: voce fala em portugues e recebe texto em ingles.
-As opcoes `EN` e `PT-PT` usam tambem um modelo de texto da OpenAI para
-converter o resultado transcrito. Para trocar esse modelo, use
+A saida padrao e `PT -> EN`: voce fala em portugues brasileiro e recebe texto
+em ingles. As rotas `PT -> EN` e `EN -> PT` usam tambem um modelo de texto da
+OpenAI para converter o resultado transcrito. Para trocar esse modelo, use
 `BANANAFONE_OPENAI_TEXT_MODEL`. O padrao atual e `gpt-4o-mini`.
 
 ### Onde colocar a chave
@@ -160,8 +160,8 @@ Fluxo:
 
 1. abra o app
 2. o modo padrao e `API`
-3. a saida padrao inicial e `EN`
-4. troque para `PT-BR` ou `PT-PT` se quiser manter portugues
+3. o fluxo padrao inicial e `PT -> EN`
+4. escolha `PT -> PT`, `EN -> EN` ou `EN -> PT` se quiser outro fluxo
 5. troque para `Fast`, `Normal` ou `API` conforme a maquina
 6. se quiser que essa combinacao vire o novo padrao, clique em `Tornar atual o padrao`
 7. clique no botao principal para falar
@@ -226,6 +226,6 @@ python -m py_compile bananafone.py
 Na primeira execucao dos modos locais, o `faster-whisper` pode baixar o modelo
 e aquecer o cache local. O botao `Baixar / Atualizar modelos` existe justamente
 para isso. O modo `API` nao usa cache local do Whisper; ele envia o audio
-capturado para a API de transcricao configurada. Quando a saida estiver em
-`EN` ou `PT-PT`, o texto transcrito passa por conversao OpenAI antes de ser
-copiado.
+capturado para a API de transcricao configurada. As rotas `PT -> PT` e
+`EN -> EN` copiam a transcricao diretamente. As rotas `PT -> EN` e `EN -> PT`
+passam por conversao OpenAI antes de copiar.
