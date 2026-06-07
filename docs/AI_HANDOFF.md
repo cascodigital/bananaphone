@@ -179,6 +179,33 @@ DONE (2026-06-07): text-provider abstraction shipped.
 Still deferred: per-task speech provider abstraction (speech is still Engine-based:
 local faster-whisper or OpenAI audio API).
 
+### NEXT (agreed design): in-app guided Ollama install
+
+Today the app pulls the model but assumes Ollama is already installed. Agreed
+plan to close that gap with a transparent, consent-first elevated install:
+
+- Trigger: user selects Ollama (local) and Ollama is not reachable (or clicks
+  Download local model with no Ollama).
+- Show an explain dialog (OK / Cancel) that states plainly what will happen,
+  that it needs the password/admin once, that audio/tickets still stay local,
+  and shows the exact command it will run (transparency).
+- On OK:
+  - Linux: `pkexec sh -c 'curl -fsSL https://ollama.com/install.sh | sh'`
+    (PolicyKit GUI password prompt; pkexec confirmed present on the dev box,
+    Zorin OS 18.1 Wayland). Then start the service and pull the model.
+  - Windows: download the official OllamaSetup.exe and launch it (UAC prompts
+    automatically). Then pull the model.
+- On Cancel: stay on Cloud, no changes.
+- Fallbacks: if pkexec/installer missing or install fails, show an "Open
+  ollama.com" button instead of failing silently.
+
+Caveat for PUBLIC launch (not personal use): a GUI app running a privileged
+install can trip antivirus/SmartScreen and worry security-minded users (ironic
+for a privacy tool). Keep it fully transparent (show the command) and always
+offer the manual download path. For André's own use this is fine as-is.
+
+Current OS of the dev machine: Linux native, Zorin OS 18.1, Wayland, pkexec OK.
+
 ## Branding / Tagline (for public launch)
 
 DECISION (2026-06-07):
