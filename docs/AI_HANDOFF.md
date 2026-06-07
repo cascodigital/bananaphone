@@ -3,6 +3,30 @@
 Status: active experimental project
 Snapshot date: 2026-06-07
 
+## WHERE WE ARE NOW (read this first)
+
+Branch: `bananaphone-v2-next-ui`. All work committed locally, ahead of origin
+(not pushed by request). Working tree clean. `py_compile` passes.
+
+Done and working:
+- GUI fully redesigned in CustomTkinter (see `docs/bananaphone-v2-ui.png`).
+- Packaging: `install.sh` (Linux), `install_windows.ps1` + double-click
+  `Install-BananaPhone.bat` (Windows), `build_windows_exe.ps1` (standalone exe).
+- Text AI provider is configurable: Cloud (OpenAI) / Ollama (local) / Custom,
+  via Settings (provider + model + Server URL). Ollama path needs no API key and
+  uses `keep_alive: 0`. See "Local Mode Architecture" below.
+- In-app "Download local model" button pulls the Ollama model (Settings, shown
+  only for Ollama).
+- Branding decided: public name candidate SaySense, tagline "You speak. It makes
+  sense." (see "Branding"). Competitive scan recorded (see "Competitive Positioning").
+
+Next task (design already agreed, not yet coded): in-app guided Ollama INSTALL
+with a consent dialog (OK/Cancel) + elevated install (pkexec on Linux, UAC on
+Windows). Full spec under "NEXT (agreed design): in-app guided Ollama install".
+
+Open testing TODO: end-to-end local Jira run (install Ollama, pull qwen2.5:3b,
+Settings -> Ollama, generate a Jira note). Dev box (Zorin OS 18.1) has no Ollama yet.
+
 IMPORTANT: this repository directory is now the primary BananaPhone v2 checkout.
 
 Main v2 code:
