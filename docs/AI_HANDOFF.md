@@ -129,6 +129,45 @@ Other deferred items:
 Done: install/launcher packaging for v2 (`install.sh`, `install_windows.ps1`,
 `build_windows_exe.ps1`).
 
+## Branding / Tagline (for public launch)
+
+DECISION (2026-06-07):
+
+- Repo / internal codename: BananaPhone (unchanged; banana stays as icon/easter egg)
+- Public product name (candidate): SaySense
+- Tagline: "You speak. It makes sense."
+
+Why SaySense: the name IS the tagline (say + sense), zero exact-name repo
+collisions on GitHub at decision time. Still TODO before launch: verify
+saysense.com/.app domain and trademark (USPTO/INPI) — GitHub name being free
+does not guarantee domain/trademark.
+
+Core idea: the human speaks raw, the machine creates meaning. Voice in,
+polished/structured text out (transcription, translation, Jira docs).
+
+Seed (PT): "O primata fala, a máquina cria o sentido."
+
+Runner-up names (also 0 GitHub exact-name collisions): SayWise, SayNoted, VoxWrite.
+
+Candidate taglines:
+
+- EN:
+  - "You speak. It makes sense."
+  - "From mumble to meaning."
+  - "Speak raw. Send polished."
+  - "Talk like a human, write like a pro."
+  - "Your voice, structured."
+  - "Dictate the chaos. Ship the clarity."
+- PT:
+  - "Você fala. Ela faz sentido."
+  - "Do balbucio ao significado."
+  - "Fale solto. Mande pronto."
+  - "Fale como gente, escreva como profissional."
+
+Decide tone before launch: playful (primate/banana identity) vs. clean utility.
+Keep one short hero line + one functional subline (e.g. "Dictation that writes
+your tickets for you").
+
 ## Validation
 
 After code changes, run:
