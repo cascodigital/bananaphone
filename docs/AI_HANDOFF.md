@@ -168,6 +168,39 @@ Decide tone before launch: playful (primate/banana identity) vs. clean utility.
 Keep one short hero line + one functional subline (e.g. "Dictation that writes
 your tickets for you").
 
+## Competitive Positioning (market scan 2026-06-07)
+
+Honest prior-art assessment. The two core ideas are NOT blue ocean:
+
+1. Speech -> polished professional text: crowded, hot 2026 category.
+   Direct competitors: Wispr Flow (well funded), Typeless, WriteVoice,
+   Voice Cursor, Google "Eloquent" (free, offline). The "ramble, we strip
+   the filler and make it read like you typed it" pitch is now standard.
+   Low originality; high market validation.
+
+2. Voice -> Jira ticket: already exists too. SpeakOneAI (has a /jira page,
+   does rewrite + translation + transcription = nearly our combo), Voice to
+   Ticket for Jira, Talk2Task, Deviniti AI Ticket Assistant.
+
+What is actually differentiated here (the defensible niche):
+
+- Dual output from one dictation: public `Customer Comment` + private,
+  technical `Internal Note`, tuned for IT support. No exact match found.
+- Input != Output language as a first-class control (speak PT -> EN ticket).
+  Competitors treat language as a detail, not a routing control.
+- Local-first + hybrid (faster-whisper local + API), self-hosted, no SaaS,
+  no subscription. All the commercial players are cloud SaaS.
+
+Strategy: do NOT try to beat Wispr Flow at the SaaS game (they have capital).
+Angle = "local, private dictation-to-Jira for bilingual IT support that splits
+what the customer reads from what stays internal." Sell privacy + the IT niche,
+not generic voice-to-text.
+
+References:
+- https://wisprflow.ai/  https://www.typeless.com/  https://appsumo.com/products/writevoice/
+- https://speakoneai.com/use-cases/en/jira  https://marketplace.atlassian.com/apps/3939463879/voice-to-ticket-for-jira
+- https://magneticonemobile.com/products/talk-2-task-for-jira/  https://deviniti.com/products/atlassian-apps/ai-ticket-assistant/
+
 ## Validation
 
 After code changes, run:
