@@ -13,6 +13,12 @@ Run it with:
 ./.venv/bin/python bananaphone_v2.py
 ```
 
+If `.venv` has not been created in this checkout yet, syntax validation can use:
+
+```bash
+python3 -m py_compile bananaphone_v2.py
+```
+
 ## Current v2 scope
 
 - English UI under the visible app name `BananaPhone`
