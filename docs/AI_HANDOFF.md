@@ -167,12 +167,17 @@ Selling point this unlocks: "even ticket generation is 100% local; your audio
 AND your tickets never leave the machine." Cloud SaaS competitors cannot say
 this. Keep cloud as optional premium-speed tier; local as the privacy tier.
 
-Implementation sketch (when picked up):
-- settings_v2.json: add text_provider, text_model, text_base_url, speech_provider...
-- transform_output_text() / transform_to_jira(): read base_url + model from config
-  instead of the hard-coded OPENAI_* constants.
-- Settings UI: a provider dropdown (Cloud / Local Ollama / Custom URL) + model field.
-- For Ollama requests, include `keep_alive: 0` (and `format: json` for Jira).
+DONE (2026-06-07): text-provider abstraction shipped.
+- settings_v2.json now stores text_provider / text_model / text_base_url.
+- run_text_chat() is the unified OpenAI-compatible caller; transform_output_text()
+  and transform_to_jira() use it. Ollama path sends `keep_alive: 0` and needs no key.
+- Settings UI: provider dropdown (Cloud / Ollama local / Custom) + model + Server URL.
+- In-app "Download local model" button (shown only for Ollama) pulls via the Ollama
+  /api/pull API with progress. The app pulls the model but does NOT install Ollama
+  itself (system install, out of scope) — Ollama is a prerequisite like Python.
+
+Still deferred: per-task speech provider abstraction (speech is still Engine-based:
+local faster-whisper or OpenAI audio API).
 
 ## Branding / Tagline (for public launch)
 
