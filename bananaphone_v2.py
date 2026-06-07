@@ -47,6 +47,31 @@ OPENAI_KEY_FILES = [
     os.path.expanduser("~/ai/config/ai-keys.md"),
     os.path.expanduser("~/.config/bananafone/ai-keys.md"),
 ]
+# --- Text AI provider (translation + Jira) --------------------------------
+# The text tasks (PT->EN translation and Jira dual-output) speak the OpenAI
+# Chat API, so any OpenAI-compatible endpoint works: OpenAI cloud, a local
+# Ollama / llama.cpp / LM Studio server, or a custom URL. Speech (faster-whisper
+# local, or OpenAI audio API) is configured separately by Engine.
+DEFAULT_OPENAI_BASE_URL = "https://api.openai.com/v1"
+DEFAULT_OLLAMA_BASE_URL = "http://localhost:11434/v1"
+
+TEXT_PROVIDERS = {
+    "OpenAI (cloud)": "openai",
+    "Ollama (local)": "ollama",
+    "Custom (OpenAI-compatible)": "custom",
+}
+TEXT_PROVIDER_LABELS = {value: key for key, value in TEXT_PROVIDERS.items()}
+PROVIDER_DEFAULT_MODEL = {
+    "openai": DEFAULT_OPENAI_TEXT_MODEL,
+    "ollama": "qwen2.5:3b",
+    "custom": DEFAULT_OPENAI_TEXT_MODEL,
+}
+PROVIDER_DEFAULT_BASE_URL = {
+    "openai": DEFAULT_OPENAI_BASE_URL,
+    "ollama": DEFAULT_OLLAMA_BASE_URL,
+    "custom": DEFAULT_OLLAMA_BASE_URL,
+}
+
 DEFAULT_SILENCE_TIMEOUT = os.environ.get("BANANAPHONE_V2_SILENCE_TIMEOUT", "4")
 SILENCE_TIMEOUT_OPTIONS = ("4", "7", "10", "off")
 MIN_SPEECH_SECONDS = float(os.environ.get("BANANAFONE_MIN_SPEECH_SECONDS", "0.35"))
@@ -192,6 +217,13 @@ class DictationApp:
         self.default_jira_mode = self.settings.get("default_jira_mode", False)
         self.silence_timeout_setting = self.settings.get("silence_timeout", DEFAULT_SILENCE_TIMEOUT)
         self.configured_api_key = self.settings.get("api_key", "")
+        self.text_provider = self.settings.get("text_provider", "openai")
+        self.text_model = self.settings.get("text_model", "") or PROVIDER_DEFAULT_MODEL.get(
+            self.text_provider, DEFAULT_OPENAI_TEXT_MODEL
+        )
+        self.text_base_url = self.settings.get("text_base_url", "") or PROVIDER_DEFAULT_BASE_URL.get(
+            self.text_provider, DEFAULT_OPENAI_BASE_URL
+        )
         self.mode_key = self.default_mode_key
         self.mode = MODES[self.mode_key]
         self.model = None
@@ -608,8 +640,8 @@ class DictationApp:
         if not notes:
             self.update_status("No Raw Notes to generate JIRA output.", COLOR_WARN)
             return
-        if not self.get_openai_api_key():
-            self.update_status("JIRA MODE requires an OpenAI API key. Open Settings.", COLOR_WARN)
+        if self.text_requires_key() and not self.get_openai_api_key():
+            self.update_status("JIRA MODE needs an API key for the selected text provider. Open Settings.", COLOR_WARN)
             return
 
         self.generating_jira = True
@@ -681,8 +713,8 @@ class DictationApp:
         self.set_hold_button_idle()
         self.set_mode_button_states()
         if enabled:
-            if not self.get_openai_api_key():
-                self.update_status("JIRA MODE requires an OpenAI API key. Open Settings.", COLOR_WARN)
+            if self.text_requires_key() and not self.get_openai_api_key():
+                self.update_status("JIRA MODE needs an API key for the selected text provider. Open Settings.", COLOR_WARN)
             if self.mode_key != "slow":
                 self.select_mode("slow")
 
@@ -725,12 +757,18 @@ class DictationApp:
             return "PRESS TO TALK  ·  click again to stop"
         return "PRESS TO TALK  ·  auto-stops on silence"
 
+    def text_provider_short(self):
+        return {"openai": "Cloud", "ollama": "Local", "custom": "Custom"}.get(self.text_provider, "Cloud")
+
     def current_route_status(self):
         input_name = LANGUAGES[self.input_language]["name"]
         output_name = LANGUAGES[self.output_target]["name"]
         mode_label = " | JIRA MODE" if self.jira_mode else ""
         timeout = self.silence_timeout_label()
-        return f"{self.mode['status']} | Input: {input_name} | Output: {output_name}{mode_label} | Silence: {timeout}"
+        text_ai = ""
+        if self.jira_mode or self.input_language != self.output_target:
+            text_ai = f" | Text AI: {self.text_provider_short()}"
+        return f"{self.mode['status']} | Input: {input_name} | Output: {output_name}{mode_label} | Silence: {timeout}{text_ai}"
 
     def source_language(self):
         return self.input_language
@@ -767,6 +805,11 @@ class DictationApp:
             default_mode = "slow"
         if silence_timeout not in SILENCE_TIMEOUT_OPTIONS:
             silence_timeout = DEFAULT_SILENCE_TIMEOUT
+        text_provider = settings.get("text_provider", "openai")
+        if text_provider not in ("openai", "ollama", "custom"):
+            text_provider = "openai"
+        text_model = str(settings.get("text_model", "")).strip()
+        text_base_url = str(settings.get("text_base_url", "")).strip()
         return {
             "default_mode": default_mode,
             "default_input_language": default_input_language,
@@ -774,6 +817,9 @@ class DictationApp:
             "default_jira_mode": default_jira_mode,
             "silence_timeout": silence_timeout,
             "api_key": settings.get("api_key", "").strip(),
+            "text_provider": text_provider,
+            "text_model": text_model,
+            "text_base_url": text_base_url,
         }
 
     def write_settings(self):
@@ -784,6 +830,9 @@ class DictationApp:
             "default_jira_mode": self.default_jira_mode,
             "silence_timeout": self.silence_timeout_setting,
             "api_key": self.configured_api_key,
+            "text_provider": self.text_provider,
+            "text_model": self.text_model,
+            "text_base_url": self.text_base_url,
         }
         with open(SETTINGS_FILE, "w", encoding="utf-8") as handle:
             json.dump(settings, handle, indent=2)
@@ -816,7 +865,7 @@ class DictationApp:
 
         dialog = ctk.CTkToplevel(self.root)
         dialog.title("BananaPhone Settings")
-        dialog.geometry("480x420")
+        dialog.geometry("520x720")
         dialog.configure(fg_color=COLOR_WINDOW)
         dialog.transient(self.root)
         dialog.after(50, dialog.grab_set)
@@ -873,9 +922,81 @@ class DictationApp:
             justify="left",
         ).pack(anchor="w", pady=(0, 16))
 
+        # --- Text AI provider (translation + Jira) ----------------------
         ctk.CTkLabel(
             body,
-            text="Local models",
+            text="Text AI  —  translation & Jira",
+            font=ctk.CTkFont(size=13, weight="bold"),
+            text_color=COLOR_TITLE,
+        ).pack(anchor="w")
+
+        provider_var = tk.StringVar(value=TEXT_PROVIDER_LABELS.get(self.text_provider, "OpenAI (cloud)"))
+        model_var = tk.StringVar(value=self.text_model)
+        baseurl_var = tk.StringVar(value=self.text_base_url)
+
+        provider_menu = ctk.CTkOptionMenu(
+            body,
+            variable=provider_var,
+            values=list(TEXT_PROVIDERS.keys()),
+            font=ctk.CTkFont(size=12),
+            fg_color=COLOR_FIELD,
+            button_color=BTN_PRIMARY,
+            button_hover_color=BTN_PRIMARY_HOVER,
+            corner_radius=8,
+            dropdown_fg_color=COLOR_CARD,
+            dropdown_hover_color=BTN_PRIMARY,
+        )
+        provider_menu.pack(fill=tk.X, pady=(6, 8))
+
+        ctk.CTkLabel(
+            body, text="Model", font=ctk.CTkFont(size=11), text_color=COLOR_MUTED
+        ).pack(anchor="w")
+        model_entry = ctk.CTkEntry(
+            body,
+            textvariable=model_var,
+            font=ctk.CTkFont(size=12),
+            fg_color=COLOR_FIELD,
+            border_color=COLOR_CARD_BORDER,
+            corner_radius=8,
+        )
+        model_entry.pack(fill=tk.X, pady=(2, 6))
+
+        ctk.CTkLabel(
+            body, text="Server URL", font=ctk.CTkFont(size=11), text_color=COLOR_MUTED
+        ).pack(anchor="w")
+        baseurl_entry = ctk.CTkEntry(
+            body,
+            textvariable=baseurl_var,
+            font=ctk.CTkFont(size=12),
+            fg_color=COLOR_FIELD,
+            border_color=COLOR_CARD_BORDER,
+            corner_radius=8,
+        )
+        baseurl_entry.pack(fill=tk.X, pady=(2, 6))
+
+        def on_provider_change(label):
+            key = TEXT_PROVIDERS.get(label, "openai")
+            model_var.set(PROVIDER_DEFAULT_MODEL.get(key, DEFAULT_OPENAI_TEXT_MODEL))
+            baseurl_var.set(PROVIDER_DEFAULT_BASE_URL.get(key, DEFAULT_OPENAI_BASE_URL))
+
+        provider_menu.configure(command=on_provider_change)
+
+        ctk.CTkLabel(
+            body,
+            text=(
+                "Ollama (local): run  ollama pull qwen2.5:3b  then  ollama serve. "
+                "No API key needed; the model is freed from RAM after each call. "
+                "Cloud is faster; local keeps audio and tickets fully on this machine."
+            ),
+            font=ctk.CTkFont(size=11),
+            text_color=COLOR_SUBTLE,
+            wraplength=460,
+            justify="left",
+        ).pack(anchor="w", pady=(0, 16))
+
+        ctk.CTkLabel(
+            body,
+            text="Local speech models",
             font=ctk.CTkFont(size=13, weight="bold"),
             text_color=COLOR_TITLE,
         ).pack(anchor="w")
@@ -898,6 +1019,13 @@ class DictationApp:
         def save_settings():
             self.silence_timeout_setting = silence_var.get()
             self.configured_api_key = key_var.get().strip()
+            self.text_provider = TEXT_PROVIDERS.get(provider_var.get(), "openai")
+            self.text_model = model_var.get().strip() or PROVIDER_DEFAULT_MODEL.get(
+                self.text_provider, DEFAULT_OPENAI_TEXT_MODEL
+            )
+            self.text_base_url = baseurl_var.get().strip() or PROVIDER_DEFAULT_BASE_URL.get(
+                self.text_provider, DEFAULT_OPENAI_BASE_URL
+            )
             self.write_settings()
             self.route_label.configure(text=self.current_route_status())
             self.set_hold_button_idle()
@@ -1232,6 +1360,55 @@ class DictationApp:
                 continue
         return None
 
+    def text_requires_key(self):
+        # Local Ollama needs no API key; cloud/custom OpenAI-compatible do.
+        return self.text_provider != "ollama"
+
+    def text_chat_url(self):
+        return self.text_base_url.rstrip("/") + "/chat/completions"
+
+    def run_text_chat(self, messages, json_mode=False, timeout=90):
+        model = self.text_model or PROVIDER_DEFAULT_MODEL.get(self.text_provider, DEFAULT_OPENAI_TEXT_MODEL)
+        payload = {
+            "model": model,
+            "messages": messages,
+            "temperature": 0,
+        }
+        if json_mode:
+            payload["response_format"] = {"type": "json_object"}
+
+        headers = {"Content-Type": "application/json"}
+        if self.text_provider == "ollama":
+            # Free the model from RAM right after the call (load-on-demand).
+            payload["keep_alive"] = 0
+        else:
+            api_key = self.get_openai_api_key()
+            if not api_key:
+                raise RuntimeError("Text provider needs an API key. Open Settings.")
+            headers["Authorization"] = f"Bearer {api_key}"
+
+        request = urllib.request.Request(
+            self.text_chat_url(),
+            data=json.dumps(payload).encode("utf-8"),
+            method="POST",
+            headers=headers,
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=timeout) as response:
+                data = json.loads(response.read().decode("utf-8"))
+        except urllib.error.HTTPError as exc:
+            details = exc.read().decode("utf-8", errors="replace")
+            raise RuntimeError(f"Text HTTP {exc.code}: {details[:160]}")
+        except urllib.error.URLError as exc:
+            raise RuntimeError(f"Text provider unreachable ({self.text_provider}): {exc.reason}")
+
+        return (
+            data.get("choices", [{}])[0]
+            .get("message", {})
+            .get("content", "")
+            .strip()
+        )
+
     def transcribe_with_openai(self, pcm_audio):
         api_key = self.get_openai_api_key()
         if not api_key:
@@ -1295,10 +1472,6 @@ class DictationApp:
         if source_language == target_language:
             return text
 
-        api_key = self.get_openai_api_key()
-        if not api_key:
-            raise RuntimeError("OPENAI_API_KEY missing for text conversion")
-
         source_name = LANGUAGES[source_language]["name"]
         target_name = LANGUAGES[target_language]["name"]
         system_prompt = (
@@ -1308,45 +1481,14 @@ class DictationApp:
             f"Output only the final {target_name} text."
         )
 
-        payload = {
-            "model": DEFAULT_OPENAI_TEXT_MODEL,
-            "messages": [
+        return self.run_text_chat(
+            [
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": text},
-            ],
-            "temperature": 0,
-        }
-        request = urllib.request.Request(
-            OPENAI_CHAT_URL,
-            data=json.dumps(payload).encode("utf-8"),
-            method="POST",
-            headers={
-                "Authorization": f"Bearer {api_key}",
-                "Content-Type": "application/json",
-            },
-        )
-
-        try:
-            with urllib.request.urlopen(request, timeout=60) as response:
-                payload = json.loads(response.read().decode("utf-8"))
-        except urllib.error.HTTPError as exc:
-            details = exc.read().decode("utf-8", errors="replace")
-            raise RuntimeError(f"OpenAI text HTTP {exc.code}: {details[:160]}")
-        except urllib.error.URLError as exc:
-            raise RuntimeError(f"Text network failure: {exc.reason}")
-
-        return (
-            payload.get("choices", [{}])[0]
-            .get("message", {})
-            .get("content", "")
-            .strip()
+            ]
         )
 
     def transform_to_jira(self, text):
-        api_key = self.get_openai_api_key()
-        if not api_key:
-            raise RuntimeError("JIRA output requires an OpenAI API key")
-
         source_name = LANGUAGES[self.input_language]["name"]
         language_name = LANGUAGES[self.output_target]["name"]
         system_prompt = (
@@ -1359,39 +1501,12 @@ class DictationApp:
             "progress update instead of pretending the ticket is closed."
         )
 
-        payload = {
-            "model": DEFAULT_OPENAI_TEXT_MODEL,
-            "messages": [
+        content = self.run_text_chat(
+            [
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": text},
             ],
-            "temperature": 0,
-            "response_format": {"type": "json_object"},
-        }
-        request = urllib.request.Request(
-            OPENAI_CHAT_URL,
-            data=json.dumps(payload).encode("utf-8"),
-            method="POST",
-            headers={
-                "Authorization": f"Bearer {api_key}",
-                "Content-Type": "application/json",
-            },
-        )
-
-        try:
-            with urllib.request.urlopen(request, timeout=60) as response:
-                payload = json.loads(response.read().decode("utf-8"))
-        except urllib.error.HTTPError as exc:
-            details = exc.read().decode("utf-8", errors="replace")
-            raise RuntimeError(f"OpenAI JIRA HTTP {exc.code}: {details[:160]}")
-        except urllib.error.URLError as exc:
-            raise RuntimeError(f"JIRA network failure: {exc.reason}")
-
-        content = (
-            payload.get("choices", [{}])[0]
-            .get("message", {})
-            .get("content", "")
-            .strip()
+            json_mode=True,
         )
         try:
             parsed = json.loads(content)
