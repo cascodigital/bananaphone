@@ -46,6 +46,8 @@ Linux:
 ./install.sh
 ```
 
+Windows (easiest): double-click **`Install-BananaPhone.bat`**.
+
 Windows (PowerShell):
 
 ```powershell

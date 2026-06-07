@@ -4,6 +4,31 @@ Same engine as Linux: PyAudio capture, local `faster-whisper` transcription or
 cloud `API` mode via OpenAI, plus `JIRA MODE`. The UI is CustomTkinter (dark,
 rounded controls).
 
+## TL;DR — fastest install
+
+Needs Python 3.10+ installed first (python.org, tick "Add python.exe to PATH").
+
+Then pick one:
+
+- **Easiest:** double-click **`Install-BananaPhone.bat`**. Done.
+  (A `.ps1` cannot be run by double-click and is blocked by the execution
+  policy — the `.bat` handles both for you. It only bypasses the policy for
+  that one run; it does not change any system setting.)
+- **Right-click:** right-click `install_windows.ps1` → *Run with PowerShell*.
+- **Manual (PowerShell):**
+  ```powershell
+  cd path\to\bananaphone_v2
+  Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+  .\install_windows.ps1
+  ```
+
+All three create the venv, install dependencies, and put a **BananaPhone**
+shortcut on your Desktop and Start Menu. Double-click the shortcut to run.
+Set the OpenAI key later inside the app's **Settings** (or use `-PromptForKey`,
+see below).
+
+---
+
 Two ways to run on Windows:
 
 1. **Python venv + shortcut** (fastest to set up, recommended for your own machine)
