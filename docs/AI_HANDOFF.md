@@ -129,6 +129,51 @@ Other deferred items:
 Done: install/launcher packaging for v2 (`install.sh`, `install_windows.ps1`,
 `build_windows_exe.ps1`).
 
+## Local Mode Architecture (plan, 2026-06-07)
+
+Goal: make translation and Jira generation work fully offline WITHOUT turning a
+dictation app into a 6 GB resident-model anchor. Dictation itself already needs
+no LLM (same-language transcription copies Whisper output directly).
+
+Design rules:
+
+1. Never force an LLM for dictation. Default app = Whisper only (~1 GB RAM).
+   The LLM is opt-in, only for translation (input != output) and Jira.
+
+2. Provider is configurable per task (the deferred "text provider" abstraction).
+   The code already speaks the OpenAI Chat API, so any OpenAI-compatible
+   endpoint works with no protocol change. Three sources:
+   - Cloud API (gpt-4o-mini): 0 local RAM, ~2-4s. "Fast" tier.
+   - Local Ollama / llama.cpp: offline, private. "Private" tier.
+   - BYO endpoint: point at the user's existing Ollama / LM Studio. App adds 0 footprint.
+
+3. Right-size the local model. Do NOT use 7B. The Jira split and PT->EN
+   translation are short instruction-following + JSON tasks.
+   Recommended: Qwen2.5-3B-Instruct Q4_K_M (~2 GB disk, ~3 GB RAM during a burst).
+   Floor: Qwen2.5-1.5B (~1 GB / ~2 GB) with some quality loss.
+
+4. Load-on-demand, unload-after. For Ollama set `keep_alive: 0` so the model
+   is freed from RAM right after each request. Idle dictation = only Whisper.
+   Peak (~1 GB Whisper + ~3 GB model) lasts only the seconds it generates,
+   then drops back to ~1 GB. Cold-load (~1-4s) is negligible against a Jira
+   call that already takes 10-40s on CPU.
+
+Resulting footprint:
+- Dictation idle: ~1 GB RAM, CPU only in bursts.
+- Jira/translate via cloud: +0 local RAM.
+- Jira/translate via local 3B: +~3 GB RAM for a few seconds, then released.
+
+Selling point this unlocks: "even ticket generation is 100% local; your audio
+AND your tickets never leave the machine." Cloud SaaS competitors cannot say
+this. Keep cloud as optional premium-speed tier; local as the privacy tier.
+
+Implementation sketch (when picked up):
+- settings_v2.json: add text_provider, text_model, text_base_url, speech_provider...
+- transform_output_text() / transform_to_jira(): read base_url + model from config
+  instead of the hard-coded OPENAI_* constants.
+- Settings UI: a provider dropdown (Cloud / Local Ollama / Custom URL) + model field.
+- For Ollama requests, include `keep_alive: 0` (and `format: json` for Jira).
+
 ## Branding / Tagline (for public launch)
 
 DECISION (2026-06-07):
