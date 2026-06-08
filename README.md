@@ -40,19 +40,35 @@ README_V1.md
 
 ## Install
 
-Linux:
+The installers are self-contained: they install **every** dependency on a clean
+machine (system packages + Python venv), so the only manual step on Linux can be
+typing your sudo password.
+
+Linux (apt / dnf / pacman auto-detected; installs python3, tkinter, PortAudio,
+build headers, then the venv):
 
 ```bash
-./install.sh
+./install.sh                # app + dependencies
+./install.sh --with-ollama  # also install Ollama + pull qwen2.5:3b for offline text/Jira
 ```
 
 Windows (easiest): double-click **`Install-BananaPhone.bat`**.
 
-Windows (PowerShell):
+Windows (PowerShell) — installs Python automatically via winget if missing:
 
 ```powershell
 .\install_windows.ps1
+.\install_windows.ps1 -WithOllama   # also install Ollama + pull qwen2.5:3b
 ```
+
+### Local text LLM (optional)
+
+The PT→EN translation and Jira dual-output can run fully offline through
+[Ollama](https://ollama.com). `--with-ollama` / `-WithOllama` installs the
+runtime and pulls the default model; otherwise the app's **Settings → Download
+local model** button pulls it on demand (Ollama must be installed and running).
+Speech transcription (faster-whisper) is always local and configured separately
+by Engine.
 
 Windows standalone `.exe` (run on a machine without Python) — see [README_WINDOWS.md](README_WINDOWS.md):
 

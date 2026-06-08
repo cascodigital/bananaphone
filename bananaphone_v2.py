@@ -6,6 +6,7 @@ import subprocess
 import threading
 import time
 import tkinter as tk
+from tkinter import messagebox
 import traceback
 import audioop
 import json
@@ -978,9 +979,10 @@ class DictationApp:
             body,
             text=(
                 "Ollama (local): pick the model above, then click Download local model. "
-                "Needs Ollama installed and running (ollama.com) — the app pulls the model "
-                "but cannot install Ollama itself. No API key; the model is freed from RAM "
-                "after each call. Cloud is faster; local keeps audio and tickets on this machine."
+                "If Ollama isn't installed, the app offers to install it for you (you approve "
+                "a system prompt), starts it, then downloads the model. No API key; the model "
+                "is freed from RAM after each call. Cloud is faster; local keeps audio and "
+                "tickets on this machine."
             ),
             font=ctk.CTkFont(size=11),
             text_color=COLOR_SUBTLE,
@@ -1016,18 +1018,26 @@ class DictationApp:
                 base = base[:-3].rstrip("/")
             return base
 
-        def finish_pull(message, color):
+        def reachable(root_url):
+            try:
+                urllib.request.urlopen(
+                    urllib.request.Request(root_url + "/api/tags"), timeout=3
+                ).read()
+                return True
+            except Exception:
+                return False
+
+        def set_status(message, color):
             if pull_status.winfo_exists():
                 pull_status.configure(text=message, text_color=color)
+
+        def finish_pull(message, color):
+            set_status(message, color)
             if pull_button.winfo_exists():
                 pull_button.configure(state="normal", text="Download local model")
 
-        def pull_worker(root_url, model):
-            try:
-                urllib.request.urlopen(urllib.request.Request(root_url + "/api/tags"), timeout=3).read()
-            except Exception:
-                self.root.after(0, finish_pull, "Ollama not reachable. Install it from ollama.com and start it.", COLOR_ERROR)
-                return
+        def do_pull(root_url, model):
+            # Streams `ollama pull` over the local daemon API. No privilege needed.
             try:
                 data = json.dumps({"name": model}).encode("utf-8")
                 request = urllib.request.Request(
@@ -1055,10 +1065,121 @@ class DictationApp:
                             msg = f"{status} {completed * 100 / total:.0f}%"
                         else:
                             msg = status
-                        self.root.after(0, lambda m=msg: pull_status.winfo_exists() and pull_status.configure(text=m, text_color=COLOR_INFO))
+                        self.root.after(0, set_status, msg, COLOR_INFO)
                 self.root.after(0, finish_pull, f"Model '{model}' ready.", COLOR_OK)
             except Exception as exc:
                 self.root.after(0, finish_pull, f"Pull failed: {str(exc)[:80]}", COLOR_ERROR)
+
+        def wait_until_reachable(root_url, attempts=30, delay=1.0):
+            for _ in range(attempts):
+                if reachable(root_url):
+                    return True
+                time.sleep(delay)
+            return False
+
+        def ensure_serving(root_url):
+            # Best-effort: binary present but daemon down -> launch it detached.
+            if reachable(root_url) or not shutil.which("ollama"):
+                return
+            try:
+                subprocess.Popen(
+                    ["ollama", "serve"],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    stdin=subprocess.DEVNULL,
+                    start_new_session=True,
+                )
+            except Exception:
+                pass
+
+        def install_ollama_cmd():
+            # Platform-specific elevated install. None = can't auto-install here.
+            system = platform.system()
+            if system == "Windows":
+                if shutil.which("winget"):
+                    return [
+                        "winget", "install", "--id", "Ollama.Ollama", "--source", "winget",
+                        "--accept-package-agreements", "--accept-source-agreements", "--silent",
+                    ]
+            elif system == "Linux":
+                if shutil.which("pkexec"):
+                    return ["pkexec", "sh", "-c", "curl -fsSL https://ollama.com/install.sh | sh"]
+            elif system == "Darwin":
+                if shutil.which("brew"):
+                    return ["brew", "install", "ollama"]
+            return None
+
+        def install_worker(root_url, model):
+            cmd = install_ollama_cmd()
+            if cmd is None:
+                self.root.after(0, finish_pull,
+                                "Can't auto-install here. Get Ollama from ollama.com, then click again.",
+                                COLOR_ERROR)
+                return
+            self.root.after(0, set_status, "Installing Ollama runtime (approve the prompt)...", COLOR_WARN)
+            try:
+                result = subprocess.run(cmd, capture_output=True, text=True, timeout=1800)
+            except Exception as exc:
+                self.root.after(0, finish_pull, f"Install failed: {str(exc)[:80]}", COLOR_ERROR)
+                return
+            if result.returncode != 0:
+                detail = (result.stderr or result.stdout or "").strip().replace("\n", " ")
+                self.root.after(0, finish_pull, f"Install failed: {detail[:80] or 'see logs'}", COLOR_ERROR)
+                return
+            # Linux installer starts the systemd service; Windows auto-starts.
+            self.root.after(0, set_status, "Starting Ollama...", COLOR_WARN)
+            ensure_serving(root_url)
+            if not wait_until_reachable(root_url):
+                self.root.after(0, finish_pull,
+                                "Ollama installed but not responding yet. Start it, then click again.",
+                                COLOR_ERROR)
+                return
+            do_pull(root_url, model)
+
+        def start_worker(root_url, model):
+            # Daemon installed but not reachable: bring it up, then pull.
+            self.root.after(0, set_status, "Starting Ollama...", COLOR_WARN)
+            ensure_serving(root_url)
+            if wait_until_reachable(root_url, attempts=10):
+                do_pull(root_url, model)
+            else:
+                self.root.after(0, finish_pull,
+                                "Ollama is installed but won't start. Start it manually, then click again.",
+                                COLOR_ERROR)
+
+        def prompt_install(root_url, model):
+            elevation = (
+                "." if platform.system() == "Windows"
+                else " and may ask for your password."
+            )
+            ok = messagebox.askyesno(
+                "Install Ollama runtime?",
+                "Ollama is not installed. Install it now to run the text model fully offline?\n\n"
+                "This downloads and installs the Ollama runtime" + elevation + "\n\n"
+                "The app keeps working in Cloud/API mode if you decline.",
+                parent=dialog,
+            )
+            if not ok:
+                finish_pull("Skipped. Cloud/API mode still works.", COLOR_MUTED)
+                return
+            threading.Thread(target=install_worker, args=(root_url, model), daemon=True).start()
+
+        def after_preflight(state, root_url, model):
+            if state == "reachable":
+                threading.Thread(target=do_pull, args=(root_url, model), daemon=True).start()
+            elif state == "installed_stopped":
+                threading.Thread(target=start_worker, args=(root_url, model), daemon=True).start()
+            else:  # missing
+                prompt_install(root_url, model)
+
+        def preflight_worker(root_url, model):
+            if reachable(root_url):
+                state = "reachable"
+            elif shutil.which("ollama"):
+                state = "installed_stopped"
+            else:
+                state = "missing"
+            self.root.after(0, after_preflight, state, root_url, model)
 
         def start_pull():
             model = model_var.get().strip()
@@ -1066,9 +1187,9 @@ class DictationApp:
                 pull_status.configure(text="Set a model name first.", text_color=COLOR_WARN)
                 return
             root_url = ollama_root_from(baseurl_var.get())
-            pull_button.configure(state="disabled", text="Downloading...")
-            pull_status.configure(text="Contacting Ollama...", text_color=COLOR_WARN)
-            threading.Thread(target=pull_worker, args=(root_url, model), daemon=True).start()
+            pull_button.configure(state="disabled", text="Working...")
+            pull_status.configure(text="Checking Ollama...", text_color=COLOR_WARN)
+            threading.Thread(target=preflight_worker, args=(root_url, model), daemon=True).start()
 
         pull_button.configure(command=start_pull)
 
