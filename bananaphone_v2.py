@@ -1706,14 +1706,35 @@ class DictationApp:
         source_name = LANGUAGES[self.input_language]["name"]
         language_name = LANGUAGES[self.output_target]["name"]
         system_prompt = (
-            f"You turn dictated ticket notes from {source_name} into clean Jira documentation in {language_name}. "
-            "Return strict JSON only, with keys customer_comment and internal_note. "
-            "customer_comment is public-facing, concise, professional, empathetic, and non-technical. "
-            "internal_note is private for IT support, direct, technical, and includes the issue, "
-            "investigation, actions taken, result, and any follow-up needed. "
-            "Do not invent facts. If the dictated note is not enough for a final resolution, write a "
-            "progress update instead of pretending the ticket is closed."
-        )
+            f"You are a senior IT support engineer turning dictated ticket notes from {source_name} "
+            f"into clean Jira documentation written in {language_name}. The dictation is raw, "
+            "spoken, and may be out of order or contain speech-to-text artifacts. Your job is to "
+            "reconstruct a coherent ticket from it.\n\n"
+            "Return STRICT JSON ONLY, no markdown, no prose outside the JSON, with exactly two keys: "
+            "customer_comment and internal_note.\n\n"
+            "=== customer_comment (PUBLIC — the end user reads this) ===\n"
+            "- Address the user directly and professionally.\n"
+            "- Empathetic and reassuring, never robotic, never cold.\n"
+            "- NO jargon, NO tool names, NO commands, NO internal blame, NO root-cause minutiae.\n"
+            "- Confirm what was done in plain language and what the user can expect next.\n"
+            "- 2-4 sentences. Tight. No filler openers like 'I hope this finds you well'.\n\n"
+            "=== internal_note (PRIVATE — support team only) ===\n"
+            "- Full technical picture for a peer engineer. Direct, matter-of-fact, no softening.\n"
+            "- Structure it under these labels, each on its own line, omitting any with no real content:\n"
+            "  Issue: what was reported.\n"
+            "  Investigation: what was checked and how.\n"
+            "  Actions: concrete steps taken (include tools, commands, config changes, hostnames, "
+            "ticket/asset IDs exactly as dictated).\n"
+            "  Result: current state — resolved, workaround in place, or pending.\n"
+            "  Follow-up: anything to monitor or do next. Write 'None' if truly nothing.\n\n"
+            "=== HARD RULES ===\n"
+            "- NEVER invent facts, numbers, names, error codes, or outcomes not present in the dictation. "
+            "Preserve every identifier (names, times, IPs, ticket IDs, error codes) verbatim.\n"
+            "- If the dictation does not describe a completed resolution, do NOT pretend the ticket is "
+            "closed: write Result as a progress update and reflect that in the customer_comment.\n"
+            "- If the dictation is too thin to fill a section, leave it out rather than padding it.\n"
+            "- Both fields must be written in fluent, native-level {language_name}.\n"
+        ).replace("{language_name}", language_name)
 
         content = self.run_text_chat(
             [
