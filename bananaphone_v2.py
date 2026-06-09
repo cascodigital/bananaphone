@@ -663,6 +663,7 @@ class DictationApp:
             self.copy_to_clipboard(customer_comment)
             self.root.after(0, self.finish_generate_jira, customer_comment, internal_note, elapsed)
         except Exception as exc:
+            self.log_exception("generate_jira_worker failed")
             self.root.after(0, self.fail_generate_jira, str(exc)[:80])
 
     def finish_generate_jira(self, customer_comment, internal_note, elapsed):
@@ -984,6 +985,85 @@ class DictationApp:
             corner_radius=8,
         )
         baseurl_entry.pack(fill=tk.X, pady=(2, 6))
+
+        # --- Test connection (uses the dialog's current, unsaved values) -----
+        test_row = ctk.CTkFrame(body, fg_color="transparent")
+        test_row.pack(fill=tk.X, pady=(0, 10))
+        test_button = ctk.CTkButton(
+            test_row,
+            text="Test connection",
+            font=ctk.CTkFont(size=12, weight="bold"),
+            height=32,
+            corner_radius=10,
+            fg_color=BTN_NEUTRAL,
+            hover_color=BTN_NEUTRAL_HOVER,
+        )
+        test_button.pack(side=tk.LEFT)
+        test_status = ctk.CTkLabel(
+            test_row,
+            text="",
+            font=ctk.CTkFont(size=11),
+            text_color=COLOR_MUTED,
+            wraplength=300,
+            justify="left",
+        )
+        test_status.pack(side=tk.LEFT, padx=(10, 0))
+
+        def set_test_status(message, color):
+            if test_status.winfo_exists():
+                test_status.configure(text=message, text_color=color)
+
+        def finish_test(message, color):
+            set_test_status(message, color)
+            if test_button.winfo_exists():
+                test_button.configure(state="normal", text="Test connection")
+
+        def test_worker(provider_key, model, base_url, api_key):
+            try:
+                started = time.time()
+                payload = {
+                    "model": model,
+                    "messages": [{"role": "user", "content": "ping"}],
+                    "temperature": 0,
+                    "max_tokens": 1,
+                }
+                headers = {"Content-Type": "application/json"}
+                if provider_key == "ollama":
+                    payload["keep_alive"] = 0
+                else:
+                    if not api_key:
+                        self.root.after(0, finish_test, "No API key set for this provider.", COLOR_ERROR)
+                        return
+                    headers["Authorization"] = f"Bearer {api_key}"
+                url = base_url.rstrip("/") + "/chat/completions"
+                request = urllib.request.Request(
+                    url,
+                    data=json.dumps(payload).encode("utf-8"),
+                    method="POST",
+                    headers=headers,
+                )
+                with urllib.request.urlopen(request, timeout=20) as response:
+                    json.loads(response.read().decode("utf-8"))
+                elapsed = time.time() - started
+                self.root.after(0, finish_test, f"OK — {model} replied in {elapsed:.1f}s.", COLOR_OK)
+            except urllib.error.HTTPError as exc:
+                detail = exc.read().decode("utf-8", errors="replace")
+                self.root.after(0, finish_test, f"HTTP {exc.code}: {detail[:80]}", COLOR_ERROR)
+            except urllib.error.URLError as exc:
+                self.root.after(0, finish_test, f"Unreachable: {exc.reason}", COLOR_ERROR)
+            except Exception as exc:
+                self.root.after(0, finish_test, f"Failed: {str(exc)[:80]}", COLOR_ERROR)
+
+        def start_test():
+            provider_key = TEXT_PROVIDERS.get(provider_var.get(), "openai")
+            model = model_var.get().strip() or PROVIDER_DEFAULT_MODEL.get(provider_key, DEFAULT_OPENAI_TEXT_MODEL)
+            base_url = baseurl_var.get().strip() or PROVIDER_DEFAULT_BASE_URL.get(provider_key, DEFAULT_OPENAI_BASE_URL)
+            api_key = key_var.get().strip() or (self.get_openai_api_key() or "")
+            test_button.configure(state="disabled", text="Testing...")
+            set_test_status("Contacting provider...", COLOR_WARN)
+            threading.Thread(target=test_worker, args=(provider_key, model, base_url, api_key), daemon=True).start()
+
+        test_button.configure(command=start_test)
 
         local_model_hint = ctk.CTkLabel(
             body,
@@ -1325,6 +1405,7 @@ class DictationApp:
             elapsed = time.time() - started
             self.root.after(0, self.finish_loading_mode, mode_key, elapsed)
         except Exception as exc:
+            self.log_exception("load_mode_resources failed")
             self.root.after(0, self.fail_loading_mode, str(exc))
 
     def finish_loading_mode(self, mode_key, elapsed):
@@ -1437,6 +1518,7 @@ class DictationApp:
             if speech_frames < min_chunks:
                 self.audio_chunks = []
         except Exception as exc:
+            self.log_exception("capture_audio_loop failed")
             self.root.after(0, self.handle_capture_failure, f"Capture error: {str(exc)[:60]}")
 
     def process_audio(self):
@@ -1478,6 +1560,7 @@ class DictationApp:
         except sr.UnknownValueError:
             self.root.after(0, self.after_transcription_error, "Could not understand the audio.")
         except Exception as exc:
+            self.log_exception("process_audio failed")
             self.root.after(0, self.after_transcription_error, f"Error: {str(exc)[:60]}")
 
     def after_no_audio(self):
@@ -1812,6 +1895,16 @@ class DictationApp:
         self.refresh_cache_status()
         self.update_status(f"Download/update failed: {error_text}", COLOR_ERROR)
         self.set_mode_button_states()
+
+    def log_exception(self, context):
+        # Workers only surface a truncated str(exc) in the UI; persist the full
+        # traceback so a blocked API / unreachable provider is debuggable later.
+        try:
+            with open(LOG_FILE, "a", encoding="utf-8") as log:
+                log.write(f"\n[{time.strftime('%Y-%m-%d %H:%M:%S')}] {context}\n")
+                traceback.print_exc(file=log)
+        except Exception:
+            pass
 
     def copy_to_clipboard(self, text):
         commands = []
