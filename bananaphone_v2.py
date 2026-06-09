@@ -259,7 +259,7 @@ class DictationApp:
         self.set_output_target(self.output_target, update_status=False)
         self.refresh_output_panel()
         if self.jira_mode:
-            self.mode_key = "slow"
+            self.mode_key = self.jira_speech_mode()
             self.mode = MODES[self.mode_key]
         self.select_mode(self.mode_key)
 
@@ -690,7 +690,7 @@ class DictationApp:
     def select_mode(self, mode_key):
         if self.is_recording or self.model_loading:
             return
-        if self.jira_mode and mode_key != "slow":
+        if self.jira_mode and mode_key != self.jira_speech_mode():
             return
         self.mode_key = mode_key
         self.mode = MODES[mode_key]
@@ -716,8 +716,9 @@ class DictationApp:
         if enabled:
             if self.text_requires_key() and not self.get_openai_api_key():
                 self.update_status("JIRA MODE needs an API key for the selected text provider. Open Settings.", COLOR_WARN)
-            if self.mode_key != "slow":
-                self.select_mode("slow")
+            target_mode = self.jira_speech_mode()
+            if self.mode_key != target_mode:
+                self.select_mode(target_mode)
 
     def toggle_jira_mode(self):
         self.set_jira_mode(not self.jira_mode)
@@ -777,6 +778,13 @@ class DictationApp:
     def target_language(self):
         return self.output_target
 
+    def jira_speech_mode(self):
+        # Jira speech follows the text provider so the whole flow can run
+        # offline: a local text provider (Ollama/custom) uses local Whisper,
+        # while cloud OpenAI text keeps the higher-fidelity cloud transcription.
+        # This is what lets Jira Mode work when the OpenAI API is firewalled.
+        return "slow" if self.text_provider == "openai" else "normal"
+
     def load_settings(self):
         if not os.path.isfile(SETTINGS_FILE):
             return {}
@@ -802,13 +810,15 @@ class DictationApp:
             default_input_language = "en"
         if default_output not in OUTPUT_TARGETS:
             default_output = "en"
-        if default_jira_mode:
-            default_mode = "slow"
-        if silence_timeout not in SILENCE_TIMEOUT_OPTIONS:
-            silence_timeout = DEFAULT_SILENCE_TIMEOUT
         text_provider = settings.get("text_provider", "openai")
         if text_provider not in ("openai", "ollama", "custom"):
             text_provider = "openai"
+        if default_jira_mode:
+            # Jira speech follows the text provider (see jira_speech_mode):
+            # local text provider => local Whisper, so it works offline.
+            default_mode = "slow" if text_provider == "openai" else "normal"
+        if silence_timeout not in SILENCE_TIMEOUT_OPTIONS:
+            silence_timeout = DEFAULT_SILENCE_TIMEOUT
         text_model = str(settings.get("text_model", "")).strip()
         text_base_url = str(settings.get("text_base_url", "")).strip()
         return {
