@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import base64
 import os
 import platform
 import shutil
@@ -1907,22 +1908,31 @@ class DictationApp:
             pass
 
     def copy_to_clipboard(self, text):
-        commands = []
+        payload = text.encode("utf-8")
+        commands = []  # (argv, stdin_bytes) — None stdin = text carried in argv
         system = platform.system().lower()
         if system == "windows" and shutil.which("powershell.exe"):
-            commands.append(["powershell.exe", "-NoProfile", "-Command", "$input | Set-Clipboard"])
+            # PowerShell reads stdin in the console's legacy codepage, which
+            # mangles accented PT/ES characters. Carry the text as base64 UTF-8
+            # inside the command so the bytes never touch stdin encoding.
+            b64 = base64.b64encode(payload).decode("ascii")
+            ps = (
+                "Set-Clipboard -Value ([System.Text.Encoding]::UTF8.GetString("
+                f"[System.Convert]::FromBase64String('{b64}')))"
+            )
+            commands.append((["powershell.exe", "-NoProfile", "-Command", ps], None))
         elif system == "darwin" and shutil.which("pbcopy"):
-            commands.append(["pbcopy"])
+            commands.append((["pbcopy"], payload))
 
         if os.environ.get("XDG_SESSION_TYPE") == "wayland" and shutil.which("wl-copy"):
-            commands.append(["wl-copy"])
+            commands.append((["wl-copy"], payload))
         if shutil.which("xclip"):
-            commands.append(["xclip", "-selection", "clipboard"])
+            commands.append((["xclip", "-selection", "clipboard"], payload))
 
-        for command in commands:
+        for command, stdin_bytes in commands:
             try:
                 process = subprocess.Popen(command, stdin=subprocess.PIPE)
-                process.communicate(text.encode("utf-8"), timeout=2)
+                process.communicate(stdin_bytes, timeout=2)
                 if process.returncode == 0:
                     return
             except Exception:
