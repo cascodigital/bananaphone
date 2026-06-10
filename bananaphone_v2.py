@@ -62,19 +62,18 @@ DEFAULT_OLLAMA_BASE_URL = "http://localhost:11434/v1"
 DEFAULT_GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai"
 DEFAULT_GEMINI_TEXT_MODEL = os.environ.get("BANANAFONE_GEMINI_TEXT_MODEL", "gemini-2.5-flash")
 
-# --- Speech provider for API mode ------------------------------------------
-# OpenAI exposes a Whisper-style /audio/transcriptions endpoint; Gemini has no
+# --- Speech in API mode -----------------------------------------------------
+# The single provider selection drives both text and API-mode speech. OpenAI
+# exposes a Whisper-style /audio/transcriptions endpoint; Gemini has no
 # equivalent, so its path is native generateContent with the WAV inline.
+# Local providers (Ollama/custom) have no cloud STT, so API-mode speech falls
+# back to OpenAI, the historical default.
 DEFAULT_GEMINI_SPEECH_MODEL = os.environ.get("BANANAFONE_GEMINI_MODEL", "gemini-2.5-flash")
 GEMINI_GENERATE_URL = os.environ.get(
     "BANANAFONE_GEMINI_GENERATE_URL",
     "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent",
 )
-SPEECH_PROVIDERS = {
-    "OpenAI": "openai",
-    "Gemini": "gemini",
-}
-SPEECH_PROVIDER_LABELS = {value: key for key, value in SPEECH_PROVIDERS.items()}
+SPEECH_PROVIDER_LABELS = {"openai": "OpenAI", "gemini": "Gemini"}
 
 TEXT_PROVIDERS = {
     "OpenAI (cloud)": "openai",
@@ -243,7 +242,6 @@ class DictationApp:
         self.silence_timeout_setting = self.settings.get("silence_timeout", DEFAULT_SILENCE_TIMEOUT)
         self.configured_api_key = self.settings.get("api_key", "")
         self.configured_gemini_key = self.settings.get("gemini_api_key", "")
-        self.speech_provider = self.settings.get("speech_provider", "openai")
         self.text_provider = self.settings.get("text_provider", "openai")
         self.text_model = self.settings.get("text_model", "") or PROVIDER_DEFAULT_MODEL.get(
             self.text_provider, DEFAULT_OPENAI_TEXT_MODEL
@@ -801,7 +799,7 @@ class DictationApp:
             text_ai = f" | Text AI: {self.text_provider_short()}"
         mode_status = self.mode["status"]
         if self.mode.get("backend") == "api":
-            provider_label = SPEECH_PROVIDER_LABELS.get(self.speech_provider, "OpenAI")
+            provider_label = SPEECH_PROVIDER_LABELS.get(self.api_speech_provider(), "OpenAI")
             mode_status = f"{provider_label} cloud transcription for higher precision."
         return f"{mode_status} | Input: {input_name} | Output: {output_name}{mode_label} | Silence: {timeout}{text_ai}"
 
@@ -810,6 +808,12 @@ class DictationApp:
 
     def target_language(self):
         return self.output_target
+
+    def api_speech_provider(self):
+        # One provider selection drives both text and API-mode speech. Local
+        # providers (Ollama/custom) have no cloud STT, so API-mode speech
+        # falls back to OpenAI, the historical default.
+        return "gemini" if self.text_provider == "gemini" else "openai"
 
     def jira_speech_mode(self):
         # Jira speech follows the text provider so the whole flow can run
@@ -847,9 +851,6 @@ class DictationApp:
         text_provider = settings.get("text_provider", "openai")
         if text_provider not in ("openai", "gemini", "ollama", "custom"):
             text_provider = "openai"
-        speech_provider = settings.get("speech_provider", "openai")
-        if speech_provider not in SPEECH_PROVIDERS.values():
-            speech_provider = "openai"
         if default_jira_mode:
             # Jira speech follows the text provider (see jira_speech_mode):
             # local text provider => local Whisper, so it works offline.
@@ -866,7 +867,6 @@ class DictationApp:
             "silence_timeout": silence_timeout,
             "api_key": settings.get("api_key", "").strip(),
             "gemini_api_key": str(settings.get("gemini_api_key", "")).strip(),
-            "speech_provider": speech_provider,
             "text_provider": text_provider,
             "text_model": text_model,
             "text_base_url": text_base_url,
@@ -881,7 +881,6 @@ class DictationApp:
             "silence_timeout": self.silence_timeout_setting,
             "api_key": self.configured_api_key,
             "gemini_api_key": self.configured_gemini_key,
-            "speech_provider": self.speech_provider,
             "text_provider": self.text_provider,
             "text_model": self.text_model,
             "text_base_url": self.text_base_url,
@@ -917,7 +916,7 @@ class DictationApp:
 
         dialog = ctk.CTkToplevel(self.root)
         dialog.title("BananaPhone Settings")
-        dialog.geometry("520x880")
+        dialog.geometry("520x800")
         dialog.configure(fg_color=COLOR_WINDOW)
         dialog.transient(self.root)
         dialog.after(50, dialog.grab_set)
@@ -946,82 +945,58 @@ class DictationApp:
                 hover_color=BTN_PRIMARY_HOVER,
             ).pack(side=tk.LEFT, padx=(0, 14))
 
-        ctk.CTkLabel(
-            body,
-            text="OpenAI API key",
-            font=ctk.CTkFont(size=13, weight="bold"),
-            text_color=COLOR_TITLE,
-        ).pack(anchor="w")
+        # Empty entry + status line: a detected key (env/settings/chaves.txt)
+        # shows "*****", a blank status means the key is genuinely missing.
+        def build_key_field(title, configured_value, detected_key):
+            ctk.CTkLabel(
+                body,
+                text=title,
+                font=ctk.CTkFont(size=13, weight="bold"),
+                text_color=COLOR_TITLE,
+            ).pack(anchor="w")
+            var = tk.StringVar(value=configured_value)
+            entry = ctk.CTkEntry(
+                body,
+                textvariable=var,
+                show="*",
+                font=ctk.CTkFont(size=12),
+                fg_color=COLOR_FIELD,
+                border_color=COLOR_CARD_BORDER,
+                corner_radius=8,
+            )
+            entry.pack(fill=tk.X, pady=(6, 2))
+            if detected_key:
+                status_text, status_color = "*****  key detected", COLOR_OK
+            else:
+                status_text, status_color = "missing — paste a key", COLOR_WARN
+            ctk.CTkLabel(
+                body,
+                text=status_text,
+                font=ctk.CTkFont(size=11),
+                text_color=status_color,
+            ).pack(anchor="w", pady=(0, 10))
+            return var
 
-        key_var = tk.StringVar(value=self.configured_api_key)
-        key_entry = ctk.CTkEntry(
-            body,
-            textvariable=key_var,
-            show="*",
-            font=ctk.CTkFont(size=12),
-            fg_color=COLOR_FIELD,
-            border_color=COLOR_CARD_BORDER,
-            corner_radius=8,
+        key_var = build_key_field(
+            "OpenAI API key", self.configured_api_key, self.get_openai_api_key()
         )
-        key_entry.pack(fill=tk.X, pady=(6, 10))
-
-        ctk.CTkLabel(
-            body,
-            text="Gemini API key",
-            font=ctk.CTkFont(size=13, weight="bold"),
-            text_color=COLOR_TITLE,
-        ).pack(anchor="w")
-
-        gemini_key_var = tk.StringVar(value=self.configured_gemini_key)
-        gemini_key_entry = ctk.CTkEntry(
-            body,
-            textvariable=gemini_key_var,
-            show="*",
-            font=ctk.CTkFont(size=12),
-            fg_color=COLOR_FIELD,
-            border_color=COLOR_CARD_BORDER,
-            corner_radius=8,
+        gemini_key_var = build_key_field(
+            "Gemini API key", self.configured_gemini_key, self.get_gemini_api_key()
         )
-        gemini_key_entry.pack(fill=tk.X, pady=(6, 4))
 
         ctk.CTkLabel(
             body,
-            text="Keys stored only in ~/.config/bananafone/settings_v2.json. Env fallback still works.",
+            text="Keys stored only in ~/.config/bananafone/settings_v2.json. Env and chaves.txt fallback still work.",
             font=ctk.CTkFont(size=11),
             text_color=COLOR_SUBTLE,
             wraplength=430,
             justify="left",
         ).pack(anchor="w", pady=(0, 16))
 
-        # --- Speech provider for API mode --------------------------------
+        # --- AI provider (API speech + translation + Jira) ---------------
         ctk.CTkLabel(
             body,
-            text="API mode speech  —  cloud transcription provider",
-            font=ctk.CTkFont(size=13, weight="bold"),
-            text_color=COLOR_TITLE,
-        ).pack(anchor="w")
-
-        speech_var = tk.StringVar(
-            value=SPEECH_PROVIDER_LABELS.get(self.speech_provider, "OpenAI")
-        )
-        speech_menu = ctk.CTkOptionMenu(
-            body,
-            variable=speech_var,
-            values=list(SPEECH_PROVIDERS.keys()),
-            font=ctk.CTkFont(size=12),
-            fg_color=COLOR_FIELD,
-            button_color=BTN_PRIMARY,
-            button_hover_color=BTN_PRIMARY_HOVER,
-            corner_radius=8,
-            dropdown_fg_color=COLOR_CARD,
-            dropdown_hover_color=BTN_PRIMARY,
-        )
-        speech_menu.pack(fill=tk.X, pady=(6, 16))
-
-        # --- Text AI provider (translation + Jira) ----------------------
-        ctk.CTkLabel(
-            body,
-            text="Text AI  —  translation & Jira",
+            text="AI provider  —  API speech, translation & Jira",
             font=ctk.CTkFont(size=13, weight="bold"),
             text_color=COLOR_TITLE,
         ).pack(anchor="w")
@@ -1412,7 +1387,6 @@ class DictationApp:
             self.silence_timeout_setting = silence_var.get()
             self.configured_api_key = key_var.get().strip()
             self.configured_gemini_key = gemini_key_var.get().strip()
-            self.speech_provider = SPEECH_PROVIDERS.get(speech_var.get(), "openai")
             self.text_provider = TEXT_PROVIDERS.get(provider_var.get(), "openai")
             self.text_model = model_var.get().strip() or PROVIDER_DEFAULT_MODEL.get(
                 self.text_provider, DEFAULT_OPENAI_TEXT_MODEL
@@ -1623,7 +1597,7 @@ class DictationApp:
             started = time.time()
             audio_data = audio.get_raw_data(convert_rate=16000, convert_width=2)
             if self.mode.get("backend") == "api":
-                if self.speech_provider == "gemini":
+                if self.api_speech_provider() == "gemini":
                     text, language_probability = self.transcribe_with_gemini(audio_data)
                 else:
                     text, language_probability = self.transcribe_with_openai(audio_data)
@@ -1701,7 +1675,7 @@ class DictationApp:
     def refresh_cache_status(self):
         small = "ok" if self.is_model_cached("small") else "missing"
         medium = "ok" if self.is_model_cached("medium") else "missing"
-        api_label = SPEECH_PROVIDER_LABELS.get(self.speech_provider, "OpenAI")
+        api_label = SPEECH_PROVIDER_LABELS.get(self.api_speech_provider(), "OpenAI")
         self.cache_label.configure(text=f"Models: small {small} | medium {medium} | API: {api_label}")
 
     def refresh_models(self):
@@ -1731,7 +1705,7 @@ class DictationApp:
             self.root.after(0, self.fail_refresh_models, str(exc))
 
     def require_speech_key(self):
-        if self.speech_provider == "gemini":
+        if self.api_speech_provider() == "gemini":
             if not self.get_gemini_api_key():
                 raise RuntimeError("GEMINI_API_KEY missing. Configure the API key.")
             return
