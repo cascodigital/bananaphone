@@ -46,10 +46,8 @@ python3 -m py_compile bananaphone_v2.py
 - Visible engines: `Normal`, `API`
 - Settings window for:
   - silence timeout: `4s`, `7s`, `10s`, `Off`
-  - OpenAI API key
-  - Gemini API key
-  - API mode speech provider: `OpenAI` (audio/transcriptions) or `Gemini` (native generateContent, `gemini-2.5-flash`)
-  - Text AI provider for translation & Jira: `OpenAI`, `Gemini` (OpenAI-compat endpoint), `Ollama` (local), or custom OpenAI-compatible URL
+  - OpenAI API key and Gemini API key, each with a detected/missing indicator (env, settings, or `chaves.txt`)
+  - Single AI provider selection for API speech, translation & Jira: `OpenAI`, `Gemini`, `Ollama` (local), or custom OpenAI-compatible URL. API-mode speech follows the provider (`Gemini` -> native generateContent with `gemini-2.5-flash`; everything else -> OpenAI audio/transcriptions)
   - local model download/update
 - Separate settings file: `~/.config/bananafone/settings_v2.json`
 - Separate log file: `~/.local/state/bananafone/bananaphone_v2.log`
