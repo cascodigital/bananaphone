@@ -47,6 +47,9 @@ python3 -m py_compile bananaphone_v2.py
 - Settings window for:
   - silence timeout: `4s`, `7s`, `10s`, `Off`
   - OpenAI API key
+  - Gemini API key
+  - API mode speech provider: `OpenAI` (audio/transcriptions) or `Gemini` (native generateContent, `gemini-2.5-flash`)
+  - Text AI provider for translation & Jira: `OpenAI`, `Gemini` (OpenAI-compat endpoint), `Ollama` (local), or custom OpenAI-compatible URL
   - local model download/update
 - Separate settings file: `~/.config/bananafone/settings_v2.json`
 - Separate log file: `~/.local/state/bananafone/bananaphone_v2.log`
@@ -56,11 +59,13 @@ python3 -m py_compile bananaphone_v2.py
 
 ## Behavior
 
+`Normal` engine always transcribes locally with faster-whisper. `API` engine transcribes in the cloud with the selected speech provider (OpenAI or Gemini).
+
 If input and output are the same language, the app copies the transcription directly.
 
-If input and output are different languages, the app uses the configured OpenAI text model to rewrite the dictated text into the selected output language.
+If input and output are different languages, the app uses the configured Text AI provider (OpenAI, Gemini, Ollama, or custom) to rewrite the dictated text into the selected output language.
 
-`JIRA MODE` forces the `API` engine and uses OpenAI to generate two fields:
+`JIRA MODE` uses the configured Text AI provider to generate two fields:
 
 - `Customer Comment`
 - `Internal Note`

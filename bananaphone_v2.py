@@ -44,35 +44,58 @@ OPENAI_KEY_FILE = os.environ.get(
     "BANANAFONE_OPENAI_KEY_FILE",
     "/home/aristofeles/ai/config/ai-keys.md",
 )
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 OPENAI_KEY_FILES = [
+    os.path.join(SCRIPT_DIR, "chaves.txt"),
     OPENAI_KEY_FILE,
     os.path.expanduser("~/ai/config/ai-keys.md"),
     os.path.expanduser("~/.config/bananafone/ai-keys.md"),
 ]
 # --- Text AI provider (translation + Jira) --------------------------------
 # The text tasks (PT->EN translation and Jira dual-output) speak the OpenAI
-# Chat API, so any OpenAI-compatible endpoint works: OpenAI cloud, a local
-# Ollama / llama.cpp / LM Studio server, or a custom URL. Speech (faster-whisper
-# local, or OpenAI audio API) is configured separately by Engine.
+# Chat API, so any OpenAI-compatible endpoint works: OpenAI cloud, Gemini's
+# OpenAI-compat endpoint, a local Ollama / llama.cpp / LM Studio server, or a
+# custom URL. Speech (faster-whisper local, or a cloud audio API) is configured
+# separately by Engine + the API speech provider setting.
 DEFAULT_OPENAI_BASE_URL = "https://api.openai.com/v1"
 DEFAULT_OLLAMA_BASE_URL = "http://localhost:11434/v1"
+DEFAULT_GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai"
+DEFAULT_GEMINI_TEXT_MODEL = os.environ.get("BANANAFONE_GEMINI_TEXT_MODEL", "gemini-2.5-flash")
+
+# --- Speech provider for API mode ------------------------------------------
+# OpenAI exposes a Whisper-style /audio/transcriptions endpoint; Gemini has no
+# equivalent, so its path is native generateContent with the WAV inline.
+DEFAULT_GEMINI_SPEECH_MODEL = os.environ.get("BANANAFONE_GEMINI_MODEL", "gemini-2.5-flash")
+GEMINI_GENERATE_URL = os.environ.get(
+    "BANANAFONE_GEMINI_GENERATE_URL",
+    "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent",
+)
+SPEECH_PROVIDERS = {
+    "OpenAI": "openai",
+    "Gemini": "gemini",
+}
+SPEECH_PROVIDER_LABELS = {value: key for key, value in SPEECH_PROVIDERS.items()}
 
 TEXT_PROVIDERS = {
     "OpenAI (cloud)": "openai",
+    "Gemini (cloud)": "gemini",
     "Ollama (local)": "ollama",
     "Custom (OpenAI-compatible)": "custom",
 }
 TEXT_PROVIDER_LABELS = {value: key for key, value in TEXT_PROVIDERS.items()}
 PROVIDER_DEFAULT_MODEL = {
     "openai": DEFAULT_OPENAI_TEXT_MODEL,
+    "gemini": DEFAULT_GEMINI_TEXT_MODEL,
     "ollama": "qwen2.5:7b",
     "custom": DEFAULT_OPENAI_TEXT_MODEL,
 }
 PROVIDER_DEFAULT_BASE_URL = {
     "openai": DEFAULT_OPENAI_BASE_URL,
+    "gemini": DEFAULT_GEMINI_BASE_URL,
     "ollama": DEFAULT_OLLAMA_BASE_URL,
     "custom": DEFAULT_OLLAMA_BASE_URL,
 }
+CLOUD_TEXT_PROVIDERS = ("openai", "gemini")
 
 DEFAULT_SILENCE_TIMEOUT = os.environ.get("BANANAPHONE_V2_SILENCE_TIMEOUT", "4")
 SILENCE_TIMEOUT_OPTIONS = ("4", "7", "10", "off")
@@ -189,7 +212,7 @@ MODES = {
     "slow": {
         "label": "API",
         "status": "Cloud transcription for higher precision.",
-        "backend": "openai",
+        "backend": "api",
         "api_model": DEFAULT_OPENAI_MODEL,
         "ambient_duration": 0.75,
         "prompt": "Transcribe with high fidelity for numbers, times, names, and technical terms.",
@@ -219,6 +242,8 @@ class DictationApp:
         self.default_jira_mode = self.settings.get("default_jira_mode", False)
         self.silence_timeout_setting = self.settings.get("silence_timeout", DEFAULT_SILENCE_TIMEOUT)
         self.configured_api_key = self.settings.get("api_key", "")
+        self.configured_gemini_key = self.settings.get("gemini_api_key", "")
+        self.speech_provider = self.settings.get("speech_provider", "openai")
         self.text_provider = self.settings.get("text_provider", "openai")
         self.text_model = self.settings.get("text_model", "") or PROVIDER_DEFAULT_MODEL.get(
             self.text_provider, DEFAULT_OPENAI_TEXT_MODEL
@@ -762,7 +787,9 @@ class DictationApp:
         return "PRESS TO TALK  ·  auto-stops on silence"
 
     def text_provider_short(self):
-        return {"openai": "Cloud", "ollama": "Local", "custom": "Custom"}.get(self.text_provider, "Cloud")
+        return {"openai": "OpenAI", "gemini": "Gemini", "ollama": "Local", "custom": "Custom"}.get(
+            self.text_provider, "Cloud"
+        )
 
     def current_route_status(self):
         input_name = LANGUAGES[self.input_language]["name"]
@@ -772,7 +799,11 @@ class DictationApp:
         text_ai = ""
         if self.jira_mode or self.input_language != self.output_target:
             text_ai = f" | Text AI: {self.text_provider_short()}"
-        return f"{self.mode['status']} | Input: {input_name} | Output: {output_name}{mode_label} | Silence: {timeout}{text_ai}"
+        mode_status = self.mode["status"]
+        if self.mode.get("backend") == "api":
+            provider_label = SPEECH_PROVIDER_LABELS.get(self.speech_provider, "OpenAI")
+            mode_status = f"{provider_label} cloud transcription for higher precision."
+        return f"{mode_status} | Input: {input_name} | Output: {output_name}{mode_label} | Silence: {timeout}{text_ai}"
 
     def source_language(self):
         return self.input_language
@@ -783,9 +814,10 @@ class DictationApp:
     def jira_speech_mode(self):
         # Jira speech follows the text provider so the whole flow can run
         # offline: a local text provider (Ollama/custom) uses local Whisper,
-        # while cloud OpenAI text keeps the higher-fidelity cloud transcription.
-        # This is what lets Jira Mode work when the OpenAI API is firewalled.
-        return "slow" if self.text_provider == "openai" else "normal"
+        # while cloud text (OpenAI/Gemini) keeps the higher-fidelity cloud
+        # transcription. This is what lets Jira Mode work when the cloud APIs
+        # are firewalled.
+        return "slow" if self.text_provider in CLOUD_TEXT_PROVIDERS else "normal"
 
     def load_settings(self):
         if not os.path.isfile(SETTINGS_FILE):
@@ -813,12 +845,15 @@ class DictationApp:
         if default_output not in OUTPUT_TARGETS:
             default_output = "en"
         text_provider = settings.get("text_provider", "openai")
-        if text_provider not in ("openai", "ollama", "custom"):
+        if text_provider not in ("openai", "gemini", "ollama", "custom"):
             text_provider = "openai"
+        speech_provider = settings.get("speech_provider", "openai")
+        if speech_provider not in SPEECH_PROVIDERS.values():
+            speech_provider = "openai"
         if default_jira_mode:
             # Jira speech follows the text provider (see jira_speech_mode):
             # local text provider => local Whisper, so it works offline.
-            default_mode = "slow" if text_provider == "openai" else "normal"
+            default_mode = "slow" if text_provider in CLOUD_TEXT_PROVIDERS else "normal"
         if silence_timeout not in SILENCE_TIMEOUT_OPTIONS:
             silence_timeout = DEFAULT_SILENCE_TIMEOUT
         text_model = str(settings.get("text_model", "")).strip()
@@ -830,6 +865,8 @@ class DictationApp:
             "default_jira_mode": default_jira_mode,
             "silence_timeout": silence_timeout,
             "api_key": settings.get("api_key", "").strip(),
+            "gemini_api_key": str(settings.get("gemini_api_key", "")).strip(),
+            "speech_provider": speech_provider,
             "text_provider": text_provider,
             "text_model": text_model,
             "text_base_url": text_base_url,
@@ -843,6 +880,8 @@ class DictationApp:
             "default_jira_mode": self.default_jira_mode,
             "silence_timeout": self.silence_timeout_setting,
             "api_key": self.configured_api_key,
+            "gemini_api_key": self.configured_gemini_key,
+            "speech_provider": self.speech_provider,
             "text_provider": self.text_provider,
             "text_model": self.text_model,
             "text_base_url": self.text_base_url,
@@ -878,7 +917,7 @@ class DictationApp:
 
         dialog = ctk.CTkToplevel(self.root)
         dialog.title("BananaPhone Settings")
-        dialog.geometry("520x720")
+        dialog.geometry("520x880")
         dialog.configure(fg_color=COLOR_WINDOW)
         dialog.transient(self.root)
         dialog.after(50, dialog.grab_set)
@@ -924,16 +963,60 @@ class DictationApp:
             border_color=COLOR_CARD_BORDER,
             corner_radius=8,
         )
-        key_entry.pack(fill=tk.X, pady=(6, 4))
+        key_entry.pack(fill=tk.X, pady=(6, 10))
 
         ctk.CTkLabel(
             body,
-            text="Stored only in ~/.config/bananafone/settings_v2.json. Env/file fallback still works.",
+            text="Gemini API key",
+            font=ctk.CTkFont(size=13, weight="bold"),
+            text_color=COLOR_TITLE,
+        ).pack(anchor="w")
+
+        gemini_key_var = tk.StringVar(value=self.configured_gemini_key)
+        gemini_key_entry = ctk.CTkEntry(
+            body,
+            textvariable=gemini_key_var,
+            show="*",
+            font=ctk.CTkFont(size=12),
+            fg_color=COLOR_FIELD,
+            border_color=COLOR_CARD_BORDER,
+            corner_radius=8,
+        )
+        gemini_key_entry.pack(fill=tk.X, pady=(6, 4))
+
+        ctk.CTkLabel(
+            body,
+            text="Keys stored only in ~/.config/bananafone/settings_v2.json. Env fallback still works.",
             font=ctk.CTkFont(size=11),
             text_color=COLOR_SUBTLE,
             wraplength=430,
             justify="left",
         ).pack(anchor="w", pady=(0, 16))
+
+        # --- Speech provider for API mode --------------------------------
+        ctk.CTkLabel(
+            body,
+            text="API mode speech  —  cloud transcription provider",
+            font=ctk.CTkFont(size=13, weight="bold"),
+            text_color=COLOR_TITLE,
+        ).pack(anchor="w")
+
+        speech_var = tk.StringVar(
+            value=SPEECH_PROVIDER_LABELS.get(self.speech_provider, "OpenAI")
+        )
+        speech_menu = ctk.CTkOptionMenu(
+            body,
+            variable=speech_var,
+            values=list(SPEECH_PROVIDERS.keys()),
+            font=ctk.CTkFont(size=12),
+            fg_color=COLOR_FIELD,
+            button_color=BTN_PRIMARY,
+            button_hover_color=BTN_PRIMARY_HOVER,
+            corner_radius=8,
+            dropdown_fg_color=COLOR_CARD,
+            dropdown_hover_color=BTN_PRIMARY,
+        )
+        speech_menu.pack(fill=tk.X, pady=(6, 16))
 
         # --- Text AI provider (translation + Jira) ----------------------
         ctk.CTkLabel(
@@ -1060,7 +1143,10 @@ class DictationApp:
             provider_key = TEXT_PROVIDERS.get(provider_var.get(), "openai")
             model = model_var.get().strip() or PROVIDER_DEFAULT_MODEL.get(provider_key, DEFAULT_OPENAI_TEXT_MODEL)
             base_url = baseurl_var.get().strip() or PROVIDER_DEFAULT_BASE_URL.get(provider_key, DEFAULT_OPENAI_BASE_URL)
-            api_key = key_var.get().strip() or (self.get_openai_api_key() or "")
+            if provider_key == "gemini":
+                api_key = gemini_key_var.get().strip() or (self.get_gemini_api_key() or "")
+            else:
+                api_key = key_var.get().strip() or (self.get_openai_api_key() or "")
             test_button.configure(state="disabled", text="Testing...")
             set_test_status("Contacting provider...", COLOR_WARN)
             threading.Thread(target=test_worker, args=(provider_key, model, base_url, api_key), daemon=True).start()
@@ -1325,6 +1411,8 @@ class DictationApp:
         def save_settings():
             self.silence_timeout_setting = silence_var.get()
             self.configured_api_key = key_var.get().strip()
+            self.configured_gemini_key = gemini_key_var.get().strip()
+            self.speech_provider = SPEECH_PROVIDERS.get(speech_var.get(), "openai")
             self.text_provider = TEXT_PROVIDERS.get(provider_var.get(), "openai")
             self.text_model = model_var.get().strip() or PROVIDER_DEFAULT_MODEL.get(
                 self.text_provider, DEFAULT_OPENAI_TEXT_MODEL
@@ -1334,10 +1422,11 @@ class DictationApp:
             )
             self.write_settings()
             self.route_label.configure(text=self.current_route_status())
+            self.refresh_cache_status()
             self.set_hold_button_idle()
             self.update_status("Settings saved.", COLOR_OK)
             dialog.destroy()
-            if self.mode.get("backend") == "openai" and self.model is None:
+            if self.mode.get("backend") == "api" and self.model is None:
                 self.ensure_model_loaded_async(self.mode_key)
 
         ctk.CTkButton(
@@ -1389,9 +1478,9 @@ class DictationApp:
                 )
                 self.energy_floor = self.recognizer.energy_threshold
 
-            if mode.get("backend") == "openai":
-                self.require_openai_key()
-                model = {"backend": "openai", "api_model": mode["api_model"]}
+            if mode.get("backend") == "api":
+                self.require_speech_key()
+                model = {"backend": "api", "api_model": mode["api_model"]}
             else:
                 model = WhisperModel(
                     mode["model_name"],
@@ -1533,8 +1622,11 @@ class DictationApp:
             audio = sr.AudioData(raw_data, self.capture_sample_rate, self.capture_sample_width)
             started = time.time()
             audio_data = audio.get_raw_data(convert_rate=16000, convert_width=2)
-            if self.mode.get("backend") == "openai":
-                text, language_probability = self.transcribe_with_openai(audio_data)
+            if self.mode.get("backend") == "api":
+                if self.speech_provider == "gemini":
+                    text, language_probability = self.transcribe_with_gemini(audio_data)
+                else:
+                    text, language_probability = self.transcribe_with_openai(audio_data)
             else:
                 audio_np = np.frombuffer(audio_data, dtype=np.int16).astype(np.float32) / 32768.0
                 transcribe_kwargs = dict(self.mode["transcribe_kwargs"])
@@ -1609,7 +1701,8 @@ class DictationApp:
     def refresh_cache_status(self):
         small = "ok" if self.is_model_cached("small") else "missing"
         medium = "ok" if self.is_model_cached("medium") else "missing"
-        self.cache_label.configure(text=f"Models: small {small} | medium {medium} | API cloud")
+        api_label = SPEECH_PROVIDER_LABELS.get(self.speech_provider, "OpenAI")
+        self.cache_label.configure(text=f"Models: small {small} | medium {medium} | API: {api_label}")
 
     def refresh_models(self):
         if self.model_loading or self.is_recording or self.refreshing_models:
@@ -1637,10 +1730,13 @@ class DictationApp:
         except Exception as exc:
             self.root.after(0, self.fail_refresh_models, str(exc))
 
-    def require_openai_key(self):
-        if self.get_openai_api_key():
+    def require_speech_key(self):
+        if self.speech_provider == "gemini":
+            if not self.get_gemini_api_key():
+                raise RuntimeError("GEMINI_API_KEY missing. Configure the API key.")
             return
-        raise RuntimeError("OPENAI_API_KEY missing. Configure the API key.")
+        if not self.get_openai_api_key():
+            raise RuntimeError("OPENAI_API_KEY missing. Configure the API key.")
 
     def get_openai_api_key(self):
         env_key = os.environ.get("OPENAI_API_KEY")
@@ -1661,6 +1757,25 @@ class DictationApp:
                 with open(key_file, "r", encoding="utf-8") as handle:
                     for line in handle:
                         if "OpenAI (RAG):" in line and "sk-" in line:
+                            return line.split("`")[1].strip()
+            except Exception:
+                continue
+        return None
+
+    def get_gemini_api_key(self):
+        env_key = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
+        if env_key:
+            return env_key.strip()
+        if self.configured_gemini_key:
+            return self.configured_gemini_key.strip()
+
+        for key_file in dict.fromkeys(OPENAI_KEY_FILES):
+            if not os.path.isfile(key_file):
+                continue
+            try:
+                with open(key_file, "r", encoding="utf-8") as handle:
+                    for line in handle:
+                        if "Gemini" in line and "`AIza" in line:
                             return line.split("`")[1].strip()
             except Exception:
                 continue
@@ -1688,7 +1803,10 @@ class DictationApp:
             # Keep the model resident in RAM between calls (no reload latency).
             payload["keep_alive"] = -1
         else:
-            api_key = self.get_openai_api_key()
+            if self.text_provider == "gemini":
+                api_key = self.get_gemini_api_key()
+            else:
+                api_key = self.get_openai_api_key()
             if not api_key:
                 raise RuntimeError("Text provider needs an API key. Open Settings.")
             headers["Authorization"] = f"Bearer {api_key}"
@@ -1715,17 +1833,19 @@ class DictationApp:
             .strip()
         )
 
-    def transcribe_with_openai(self, pcm_audio):
-        api_key = self.get_openai_api_key()
-        if not api_key:
-            raise RuntimeError("OPENAI_API_KEY missing")
-
+    def pcm_to_wav_bytes(self, pcm_audio):
         wav_buffer = BytesIO()
         with wave.open(wav_buffer, "wb") as wav_file:
             wav_file.setnchannels(1)
             wav_file.setsampwidth(2)
             wav_file.setframerate(16000)
             wav_file.writeframes(pcm_audio)
+        return wav_buffer.getvalue()
+
+    def transcribe_with_openai(self, pcm_audio):
+        api_key = self.get_openai_api_key()
+        if not api_key:
+            raise RuntimeError("OPENAI_API_KEY missing")
 
         boundary = f"bananafone-{uuid.uuid4().hex}"
         source_language = self.source_language()
@@ -1744,7 +1864,7 @@ class DictationApp:
                 "temperature": "0",
             },
             files={
-                "file": ("bananafone.wav", wav_buffer.getvalue(), "audio/wav"),
+                "file": ("bananafone.wav", self.pcm_to_wav_bytes(pcm_audio), "audio/wav"),
             },
         )
         request = urllib.request.Request(
@@ -1770,6 +1890,65 @@ class DictationApp:
         language = payload.get("language")
         confidence = 1.0 if language == source_language else None
         return text, confidence
+
+    def transcribe_with_gemini(self, pcm_audio):
+        # Gemini has no /audio/transcriptions endpoint; transcription goes
+        # through native generateContent with the WAV inlined as base64.
+        api_key = self.get_gemini_api_key()
+        if not api_key:
+            raise RuntimeError("GEMINI_API_KEY missing")
+
+        source_language = self.source_language()
+        source_label = LANGUAGES[source_language]["dictation_name"]
+        prompt = (
+            f"Transcribe this {source_label} audio verbatim, with high fidelity for "
+            "numbers, times, names, technical terms, and dictated punctuation. "
+            "Output ONLY the transcription text — no preamble, no quotes, no notes."
+        )
+        payload = {
+            "contents": [
+                {
+                    "parts": [
+                        {"text": prompt},
+                        {
+                            "inline_data": {
+                                "mime_type": "audio/wav",
+                                "data": base64.b64encode(
+                                    self.pcm_to_wav_bytes(pcm_audio)
+                                ).decode("ascii"),
+                            }
+                        },
+                    ]
+                }
+            ],
+            "generationConfig": {"temperature": 0},
+        }
+        request = urllib.request.Request(
+            GEMINI_GENERATE_URL.format(model=DEFAULT_GEMINI_SPEECH_MODEL),
+            data=json.dumps(payload).encode("utf-8"),
+            method="POST",
+            headers={
+                "Content-Type": "application/json",
+                "x-goog-api-key": api_key,
+            },
+        )
+
+        try:
+            with urllib.request.urlopen(request, timeout=120) as response:
+                data = json.loads(response.read().decode("utf-8"))
+        except urllib.error.HTTPError as exc:
+            details = exc.read().decode("utf-8", errors="replace")
+            raise RuntimeError(f"Gemini HTTP {exc.code}: {details[:180]}")
+        except urllib.error.URLError as exc:
+            raise RuntimeError(f"Network failure: {exc.reason}")
+
+        parts = (
+            data.get("candidates", [{}])[0]
+            .get("content", {})
+            .get("parts", [])
+        )
+        text = " ".join(part.get("text", "") for part in parts if part.get("text")).strip()
+        return text, None
 
     def transform_output_text(self, text):
         source_language = self.source_language()
