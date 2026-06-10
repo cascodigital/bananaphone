@@ -65,7 +65,7 @@ TEXT_PROVIDERS = {
 TEXT_PROVIDER_LABELS = {value: key for key, value in TEXT_PROVIDERS.items()}
 PROVIDER_DEFAULT_MODEL = {
     "openai": DEFAULT_OPENAI_TEXT_MODEL,
-    "ollama": "qwen2.5:3b",
+    "ollama": "qwen2.5:7b",
     "custom": DEFAULT_OPENAI_TEXT_MODEL,
 }
 PROVIDER_DEFAULT_BASE_URL = {
@@ -1030,7 +1030,8 @@ class DictationApp:
                 }
                 headers = {"Content-Type": "application/json"}
                 if provider_key == "ollama":
-                    payload["keep_alive"] = 0
+                    # Test doubles as a warm-up: leave the model loaded.
+                    payload["keep_alive"] = -1
                 else:
                     if not api_key:
                         self.root.after(0, finish_test, "No API key set for this provider.", COLOR_ERROR)
@@ -1544,18 +1545,15 @@ class DictationApp:
             if not text:
                 raise sr.UnknownValueError()
 
-            if self.jira_mode:
-                output_text = text
-            else:
-                output_text = self.transform_output_text(text)
+            output_text = self.transform_output_text(text)
             elapsed = time.time() - started
             if not output_text:
                 raise RuntimeError("Text conversion returned empty output")
 
+            self.copy_to_clipboard(output_text)
             if self.jira_mode:
                 result = {"raw_note": output_text}
             else:
-                self.copy_to_clipboard(output_text)
                 result = output_text
             self.root.after(0, self.after_transcription_success, result, elapsed, language_probability)
         except sr.UnknownValueError:
@@ -1574,7 +1572,7 @@ class DictationApp:
         source_label = self.source_language().upper()
         if isinstance(text, dict) and "raw_note" in text:
             self.add_jira_note(text.get("raw_note", ""))
-            copied_label = "Raw Note added"
+            copied_label = "Note polished & copied"
         elif isinstance(text, dict):
             self.set_jira_text(text.get("customer_comment", ""), text.get("internal_note", ""))
             copied_label = "Customer Comment copied"
@@ -1687,8 +1685,8 @@ class DictationApp:
 
         headers = {"Content-Type": "application/json"}
         if self.text_provider == "ollama":
-            # Free the model from RAM right after the call (load-on-demand).
-            payload["keep_alive"] = 0
+            # Keep the model resident in RAM between calls (no reload latency).
+            payload["keep_alive"] = -1
         else:
             api_key = self.get_openai_api_key()
             if not api_key:
@@ -1783,10 +1781,19 @@ class DictationApp:
         source_name = LANGUAGES[source_language]["name"]
         target_name = LANGUAGES[target_language]["name"]
         system_prompt = (
-            f"You convert dictated {source_name} into natural, professional {target_name}. "
-            "Preserve meaning, names, numbers, times, technical terms, and message intent. "
-            "Fix obvious dictation artifacts and produce text a human would actually send. "
-            f"Output only the final {target_name} text."
+            f"You are the writing layer for a senior IT support engineer. He dictates in {source_name}; "
+            f"you deliver the message he meant to send, written in clear, professional {target_name}.\n"
+            "- Fix speech-to-text artifacts, fillers, false starts, and mis-transcribed words using context. "
+            "If a word is a non-word or makes no sense in context, assume the recognizer misheard a common "
+            f"{source_name} word and use the plausible reading instead of treating it as a name.\n"
+            "- Drop meta-commentary aimed at you (e.g. 'rewrite this', 'how do I say'); keep only the message.\n"
+            "- Infer the audience and match the tone: empathetic and jargon-free for end users; direct and "
+            "technical for peers, escalations, and internal notes.\n"
+            "- Reorganize rambling dictation into coherent sentences and paragraphs; reordering for clarity "
+            "is allowed, changing the facts is not.\n"
+            "- Preserve every name, number, time, hostname, ticket ID, error code, and technical term. "
+            "NEVER invent details or outcomes that were not dictated.\n"
+            f"- Output ONLY the final {target_name} text, ready to paste. No preamble, no notes, no quotes."
         )
 
         return self.run_text_chat(
@@ -1800,10 +1807,10 @@ class DictationApp:
         source_name = LANGUAGES[self.input_language]["name"]
         language_name = LANGUAGES[self.output_target]["name"]
         system_prompt = (
-            f"You are a senior IT support engineer turning dictated ticket notes from {source_name} "
-            f"into clean Jira documentation written in {language_name}. The dictation is raw, "
-            "spoken, and may be out of order or contain speech-to-text artifacts. Your job is to "
-            "reconstruct a coherent ticket from it.\n\n"
+            f"You are a senior IT support engineer turning ticket notes into clean Jira documentation "
+            f"written in {language_name}. The notes were dictated (originally in {source_name}, possibly "
+            "already cleaned up), may be out of order, and may contain leftover speech-to-text artifacts. "
+            "Your job is to reconstruct a coherent ticket from them.\n\n"
             "Return STRICT JSON ONLY, no markdown, no prose outside the JSON, with exactly two keys: "
             "customer_comment and internal_note.\n\n"
             "=== customer_comment (PUBLIC — the end user reads this) ===\n"
