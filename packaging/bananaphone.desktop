@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=BananaPhone
+Comment=Push-to-talk dictation with language routing and Jira Mode
+Exec=BananaPhone
+Icon=bananaphone
+Terminal=false
+Categories=Utility;Audio;

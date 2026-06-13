@@ -1,6 +1,6 @@
 # 🍌 BananaPhone — Push-to-Talk Dictation & Jira Notes
 
-![Status](https://img.shields.io/badge/Status-Active-brightgreen)
+![Status](https://img.shields.io/badge/Status-Beta-yellow)
 ![License](https://img.shields.io/badge/License-MIT-blue)
 ![Python](https://img.shields.io/badge/Python-3.10+-3776AB?style=flat-square&logo=python&logoColor=white)
 ![OpenAI](https://img.shields.io/badge/OpenAI-STT%20%2B%20Text-412991?style=flat-square&logo=openai&logoColor=white)
@@ -47,7 +47,18 @@ Working support tickets in a second language means constantly juggling a transla
                                                              → internal note
 ```
 
-## Quick Start
+## Download
+
+Prebuilt packages are on the [Releases page](https://github.com/cascodigital/bananaphone_v2/releases) — no Python required:
+
+| Platform | File | Install |
+|----------|------|---------|
+| **Windows** | `BananaPhone-Setup-<version>.exe` | Run the wizard. Per-user install, no admin needed. Unsigned binary — accept the SmartScreen prompt |
+| **Linux** | `BananaPhone-<version>-x86_64.AppImage` | `chmod +x` and run. Works on any modern distro |
+
+> ⚠️ **BETA** — these builds work but haven't been battle-tested across many machines. If something breaks, [open an issue](https://github.com/cascodigital/bananaphone_v2/issues) with the log from `~/.config/bananafone/` (Linux) or `%USERPROFILE%\.config\bananafone\` (Windows).
+
+## Run from source
 
 ### Linux
 
@@ -68,7 +79,7 @@ Double-click **`Install-BananaPhone.bat`**, or from PowerShell:
 .\install_windows.ps1 -WithOllama   # also install Ollama
 ```
 
-To build a standalone `.exe` (no Python required on the target machine), see [README_WINDOWS.md](README_WINDOWS.md).
+To build the standalone packages yourself: `build_windows_exe.ps1` builds the Windows exe locally (see [README_WINDOWS.md](README_WINDOWS.md)); the Windows installer and Linux AppImage are built by CI on every `v*` tag (`.github/workflows/release.yml`).
 
 ## Configuration
 
@@ -92,10 +103,13 @@ No key is required for the Ollama path; the app can install Ollama and pull the 
 ```
 bananaphone_v2/
 ├── bananaphone_v2.py        # The whole app (CustomTkinter GUI + pipelines)
-├── install.sh               # Linux self-contained installer
-├── install_windows.ps1      # Windows installer (winget-aware)
+├── install.sh               # Linux from-source installer
+├── install_windows.ps1      # Windows from-source installer (winget-aware)
 ├── Install-BananaPhone.bat  # Windows one-click wrapper
-├── build_windows_exe.ps1    # Standalone .exe builder (PyInstaller)
+├── build_windows_exe.ps1    # Local standalone .exe builder (PyInstaller)
+├── packaging/               # Inno Setup script + AppImage desktop entry
+├── .github/workflows/       # CI release pipeline (installer + AppImage)
+├── assets/                  # App icon
 ├── desktop/                 # .desktop launchers
 ├── docs/screenshots/
 ├── bananafone.py            # Legacy v1 (kept for reference)
