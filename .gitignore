@@ -5,3 +5,4 @@ __pycache__/
 *.log
 .DS_Store
 install_windows_private.ps1
+chaves.txt
