@@ -23,7 +23,8 @@ import speech_recognition as sr
 from faster_whisper import WhisperModel
 
 APP_NAME = "BananaPhone"
-APP_VERSION = "2.2"
+APP_VERSION = "2.2-beta"
+APP_TITLE = f"{APP_NAME} {APP_VERSION.replace('-beta', ' BETA')}"
 CPU_THREADS = min(os.cpu_count() or 4, 8)
 LOG_DIR = os.path.expanduser("~/.local/state/bananafone")
 LOG_FILE = os.path.join(LOG_DIR, "bananaphone_v2.log")
@@ -226,7 +227,7 @@ os.dup2(log_fd, 2)
 class DictationApp:
     def __init__(self, root):
         self.root = root
-        self.root.title(f"{APP_NAME} {APP_VERSION}")
+        self.root.title(APP_TITLE)
         self.root.geometry("560x740")
         self.root.minsize(520, 700)
         self.root.attributes("-topmost", True)
@@ -722,6 +723,10 @@ class DictationApp:
             self.jira_frame.pack_forget()
             self.result_text.pack(fill=tk.BOTH, expand=True, padx=4, pady=(0, 8))
 
+    def update_title(self):
+        mode_label = "Jira Mode" if self.jira_mode else self.mode["label"]
+        self.root.title(f"{APP_TITLE} — {mode_label}")
+
     def select_mode(self, mode_key):
         if self.is_recording or self.model_loading:
             return
@@ -731,7 +736,7 @@ class DictationApp:
         self.mode = MODES[mode_key]
         if hasattr(self, "engine_var"):
             self.engine_var.set("Jira Mode" if self.jira_mode else MODE_LABELS.get(mode_key, "Dictate"))
-        self.root.title(f"{APP_NAME} {APP_VERSION} - {self.mode['label']}")
+        self.update_title()
         self.route_label.configure(text=self.current_route_status())
         self.refresh_defaults_label()
         self.set_mode_button_states()
@@ -743,6 +748,7 @@ class DictationApp:
         self.jira_mode = enabled
         if update_engine:
             self.engine_var.set("Jira Mode" if enabled else MODE_LABELS.get(self.mode_key, "Dictate"))
+        self.update_title()
         self.refresh_output_panel()
         self.route_label.configure(text=self.current_route_status())
         self.refresh_defaults_label()

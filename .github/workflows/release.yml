@@ -1,0 +1,109 @@
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+env:
+  PYTHON_VERSION: "3.12"
+
+jobs:
+  windows-installer:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt pyinstaller
+
+      - name: Build standalone app (PyInstaller)
+        run: >
+          pyinstaller --noconfirm --clean --windowed --onedir
+          --name BananaPhone
+          --icon assets/bananaphone.ico
+          --collect-all customtkinter
+          --collect-all faster_whisper
+          --collect-all ctranslate2
+          --collect-all av
+          --hidden-import tokenizers
+          bananaphone_v2.py
+
+      - name: Install Inno Setup
+        run: choco install innosetup -y --no-progress
+
+      - name: Build installer
+        shell: pwsh
+        run: |
+          $version = "${{ github.ref_name }}".TrimStart("v")
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" /DMyAppVersion=$version packaging\installer.iss
+
+      - name: Upload to release
+        uses: softprops/action-gh-release@v2
+        with:
+          prerelease: ${{ contains(github.ref_name, 'beta') }}
+          files: packaging/Output/BananaPhone-Setup-*.exe
+
+  linux-appimage:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y portaudio19-dev libfuse2
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt pyinstaller
+
+      - name: Build standalone app (PyInstaller)
+        run: >
+          pyinstaller --noconfirm --clean --windowed --onedir
+          --name BananaPhone
+          --collect-all customtkinter
+          --collect-all faster_whisper
+          --collect-all ctranslate2
+          --collect-all av
+          --hidden-import tokenizers
+          bananaphone_v2.py
+
+      - name: Assemble AppDir
+        run: |
+          mkdir -p AppDir/usr/bin
+          cp -r dist/BananaPhone/* AppDir/usr/bin/
+          cp packaging/bananaphone.desktop AppDir/
+          cp assets/bananaphone-256.png AppDir/bananaphone.png
+          cat > AppDir/AppRun <<'EOF'
+          #!/bin/sh
+          HERE="$(dirname "$(readlink -f "$0")")"
+          exec "$HERE/usr/bin/BananaPhone" "$@"
+          EOF
+          chmod +x AppDir/AppRun
+
+      - name: Build AppImage
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          wget -q https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage
+          chmod +x appimagetool-x86_64.AppImage
+          ARCH=x86_64 ./appimagetool-x86_64.AppImage AppDir "BananaPhone-${version}-x86_64.AppImage"
+
+      - name: Upload to release
+        uses: softprops/action-gh-release@v2
+        with:
+          prerelease: ${{ contains(github.ref_name, 'beta') }}
+          files: BananaPhone-*-x86_64.AppImage
