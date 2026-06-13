@@ -23,7 +23,7 @@ import speech_recognition as sr
 from faster_whisper import WhisperModel
 
 APP_NAME = "BananaPhone"
-APP_VERSION = "2.1-dev"
+APP_VERSION = "2.2"
 CPU_THREADS = min(os.cpu_count() or 4, 8)
 LOG_DIR = os.path.expanduser("~/.local/state/bananafone")
 LOG_FILE = os.path.join(LOG_DIR, "bananaphone_v2.log")
@@ -161,8 +161,7 @@ OUTPUT_TARGETS = {
 }
 
 MODE_CHOICES = {
-    "Normal": "normal",
-    "API": "slow",
+    "Dictate": "slow",
     "Jira Mode": "jira",
 }
 
@@ -209,7 +208,7 @@ MODES = {
         },
     },
     "slow": {
-        "label": "API",
+        "label": "Dictate",
         "status": "Cloud transcription for higher precision.",
         "backend": "api",
         "api_model": DEFAULT_OPENAI_MODEL,
@@ -321,23 +320,34 @@ class DictationApp:
         )
         self.route_frame.pack(fill=tk.X, pady=(16, 8))
 
-        self.engine_var = tk.StringVar(value="Jira Mode" if self.jira_mode else MODE_LABELS.get(self.mode_key, "API"))
+        self.engine_var = tk.StringVar(value="Jira Mode" if self.jira_mode else MODE_LABELS.get(self.mode_key, "Dictate"))
         self.input_var = tk.StringVar(value=LANGUAGE_LABELS.get(self.input_language, "English"))
         self.output_var = tk.StringVar(value=LANGUAGE_LABELS.get(self.output_target, "English"))
 
-        self.engine_combo = self._build_route_field(
-            self.route_frame, 0, "ENGINE", self.engine_var,
-            tuple(MODE_CHOICES.keys()), self.on_engine_selected,
+        self.engine_combo = ctk.CTkSegmentedButton(
+            self.route_frame,
+            values=list(MODE_CHOICES.keys()),
+            variable=self.engine_var,
+            command=self.on_engine_selected,
+            font=ctk.CTkFont(size=13, weight="bold"),
+            height=36,
+            corner_radius=8,
+            fg_color=COLOR_FIELD,
+            selected_color=BTN_PRIMARY,
+            selected_hover_color=BTN_PRIMARY_HOVER,
+            unselected_color=COLOR_FIELD,
+            unselected_hover_color=BTN_NEUTRAL_HOVER,
         )
+        self.engine_combo.grid(row=0, column=0, columnspan=2, padx=10, pady=(12, 4), sticky="ew")
         self.input_combo = self._build_route_field(
-            self.route_frame, 1, "INPUT", self.input_var,
-            tuple(LANGUAGE_CHOICES.keys()), self.on_input_selected,
+            self.route_frame, 0, "INPUT", self.input_var,
+            tuple(LANGUAGE_CHOICES.keys()), self.on_input_selected, row=1,
         )
         self.output_combo = self._build_route_field(
-            self.route_frame, 2, "OUTPUT", self.output_var,
-            tuple(LANGUAGE_CHOICES.keys()), self.on_output_selected,
+            self.route_frame, 1, "OUTPUT", self.output_var,
+            tuple(LANGUAGE_CHOICES.keys()), self.on_output_selected, row=1,
         )
-        for column in range(3):
+        for column in range(2):
             self.route_frame.grid_columnconfigure(column, weight=1)
 
         self.route_label = ctk.CTkLabel(
@@ -499,9 +509,9 @@ class DictationApp:
         )
         self.settings_button.grid(row=0, column=1, padx=6)
 
-    def _build_route_field(self, parent, column, label, variable, values, handler):
+    def _build_route_field(self, parent, column, label, variable, values, handler, row=0):
         group = ctk.CTkFrame(parent, fg_color="transparent")
-        group.grid(row=0, column=column, padx=10, pady=12, sticky="ew")
+        group.grid(row=row, column=column, padx=10, pady=12, sticky="ew")
         ctk.CTkLabel(
             group,
             text=label,
@@ -720,7 +730,7 @@ class DictationApp:
         self.mode_key = mode_key
         self.mode = MODES[mode_key]
         if hasattr(self, "engine_var"):
-            self.engine_var.set("Jira Mode" if self.jira_mode else MODE_LABELS.get(mode_key, "API"))
+            self.engine_var.set("Jira Mode" if self.jira_mode else MODE_LABELS.get(mode_key, "Dictate"))
         self.root.title(f"{APP_NAME} {APP_VERSION} - {self.mode['label']}")
         self.route_label.configure(text=self.current_route_status())
         self.refresh_defaults_label()
@@ -732,7 +742,7 @@ class DictationApp:
             return
         self.jira_mode = enabled
         if update_engine:
-            self.engine_var.set("Jira Mode" if enabled else MODE_LABELS.get(self.mode_key, "API"))
+            self.engine_var.set("Jira Mode" if enabled else MODE_LABELS.get(self.mode_key, "Dictate"))
         self.refresh_output_panel()
         self.route_label.configure(text=self.current_route_status())
         self.refresh_defaults_label()
@@ -842,8 +852,9 @@ class DictationApp:
         silence_timeout = str(settings.get("silence_timeout", DEFAULT_SILENCE_TIMEOUT)).lower()
         if default_mode not in MODES:
             default_mode = "slow"
-        if default_mode == "fast":
-            default_mode = "normal"
+        if default_mode in ("fast", "normal"):
+            # Local Whisper engines are no longer selectable in the UI.
+            default_mode = "slow"
         if default_input_language not in LANGUAGES:
             default_input_language = "en"
         if default_output not in OUTPUT_TARGETS:
@@ -1088,8 +1099,8 @@ class DictationApp:
                 }
                 headers = {"Content-Type": "application/json"}
                 if provider_key == "ollama":
-                    # Test doubles as a warm-up: leave the model loaded.
-                    payload["keep_alive"] = -1
+                    # Test doubles as a warm-up; the model unloads after 60s idle.
+                    payload["keep_alive"] = "60s"
                 else:
                     if not api_key:
                         self.root.after(0, finish_test, "No API key set for this provider.", COLOR_ERROR)
@@ -1774,8 +1785,8 @@ class DictationApp:
 
         headers = {"Content-Type": "application/json"}
         if self.text_provider == "ollama":
-            # Keep the model resident in RAM between calls (no reload latency).
-            payload["keep_alive"] = -1
+            # Hold the model in RAM briefly for quick follow-ups, then free it.
+            payload["keep_alive"] = "60s"
         else:
             if self.text_provider == "gemini":
                 api_key = self.get_gemini_api_key()
