@@ -3,7 +3,7 @@
 ## Current Product Identity
 
 - Public product name: **SaySense**
-- Version line: **1.2 Beta**
+- Version line: **1.3 Beta**
 - Tagline: **You speak. It makes sense.**
 - Internal repository / historical codename: `bananaphone_v2`
 - Legacy app kept for reference: `bananafone.py` / `README_V1.md`
@@ -29,12 +29,14 @@ implemented.
 
 ## Release Rules
 
-- Tags containing `beta`, such as `v1.2-beta`, publish prereleases.
+- Tags containing `beta`, such as `v1.3-beta`, publish prereleases.
 - GitHub Actions builds:
-  - Windows: `SaySense-Setup-<version>.exe`
-  - Windows portable: `SaySense-Portable-<version>.zip`
-  - Windows checksums: `SaySense-*.sha256`
-  - Linux: `SaySense-<version>-x86_64.AppImage`
+  - Windows installer: `SaySense-Setup-<version>.exe`
+  - Windows source zip: `SaySense-Source-<version>.zip`
+  - Linux AppImage: `SaySense-<version>-x86_64.AppImage`
+  - Checksums: `*.sha256`
+  - Optional diagnostic/portable artifacts: `SaySense-Portable-<version>.zip`
+    and `SaySense-Debug-Console-<version>.zip`
 - The active SaySense repository is `cascodigital/saysense`.
 - The historical BananaPhone v2 repository is `cascodigital/bananaphone_v2`.
 
@@ -129,13 +131,13 @@ SmartScreen bypass on the user's Windows machine. That can still be endpoint
 policy, but it can also be a hidden runtime crash because the normal PyInstaller
 build uses `--windowed`.
 
-For `v1.2-beta.2` and later, the Windows release workflow also uploads:
+For `v1.3-beta` and later, the Windows release workflow also uploads:
 
 - `SaySense-Debug-Console-<version>.zip`: a console PyInstaller build. Run
   `SaySense-Debug.exe` from PowerShell to see traceback/runtime errors.
 - `SaySense-Source-<version>.zip`: source + Windows installer scripts. Extract,
-  run `Install-SaySense.bat`, then launch via the generated shortcut or
-  `.venv\Scripts\pythonw.exe bananaphone_v2.py`.
+  run `Install-SaySense.bat`, then launch via the generated shortcut,
+  `Run-SaySense.bat`, or `.venv\Scripts\pythonw.exe bananaphone_v2.py`.
 
 Portable PyInstaller structure reminder:
 

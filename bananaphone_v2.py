@@ -24,7 +24,7 @@ import speech_recognition as sr
 from faster_whisper import WhisperModel
 
 APP_NAME = "SaySense"
-APP_VERSION = "1.2 Beta"
+APP_VERSION = "1.3 Beta"
 APP_TITLE = f"{APP_NAME} {APP_VERSION}"
 CPU_THREADS = min(os.cpu_count() or 4, 8)
 LOG_DIR = os.path.expanduser("~/.local/state/bananafone")

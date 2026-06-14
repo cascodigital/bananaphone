@@ -153,12 +153,12 @@ download.
   folder. `_internal` is only the bundled dependency folder; do not run anything
   from inside it.
 - If `SaySense.exe` silently exits after SmartScreen, use the debug console zip
-  from `v1.2-beta.2` or later and run `SaySense-Debug.exe` from PowerShell so
+  from `v1.3-beta` or later and run `SaySense-Debug.exe` from PowerShell so
   Python/PyInstaller errors stay visible.
 - If company policy blocks bundled executables, use the source zip from
-  `v1.2-beta.2` or later. Extract it, run `Install-SaySense.bat`, then start the
-  app through the generated shortcut or with `.venv\Scripts\pythonw.exe
-  bananaphone_v2.py`.
+  `v1.3-beta` or later. Extract it, run `Install-SaySense.bat`, then start the
+  app through the generated shortcut, `Run-SaySense.bat`, or with
+  `.venv\Scripts\pythonw.exe bananaphone_v2.py`.
 - If `PyAudio` fails to install, update Python/pip first. On modern Windows with
   Python 3.10+ it normally installs from a wheel.
 - For personal use you may keep an `install_windows_private.ps1` with an embedded
