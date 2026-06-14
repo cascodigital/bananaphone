@@ -23,8 +23,8 @@ import numpy as np
 import speech_recognition as sr
 from faster_whisper import WhisperModel
 
-APP_NAME = "BananaPhone"
-APP_VERSION = "1.0"
+APP_NAME = "SaySense"
+APP_VERSION = "1.0 Beta"
 APP_TITLE = f"{APP_NAME} {APP_VERSION}"
 CPU_THREADS = min(os.cpu_count() or 4, 8)
 LOG_DIR = os.path.expanduser("~/.local/state/bananafone")
@@ -317,7 +317,7 @@ class DictationApp:
         header.pack(fill=tk.X)
         self.title_label = ctk.CTkLabel(
             header,
-            text="🍌  BananaPhone",
+            text="SaySense",
             font=ctk.CTkFont(size=24, weight="bold"),
             text_color=COLOR_TITLE,
         )
@@ -1193,7 +1193,7 @@ class DictationApp:
             return
 
         dialog = ctk.CTkToplevel(self.root)
-        dialog.title("BananaPhone Settings")
+        dialog.title("SaySense Settings")
         dialog.geometry("520x800")
         dialog.configure(fg_color=COLOR_WINDOW)
         dialog.transient(self.root)
@@ -2668,6 +2668,6 @@ if __name__ == "__main__":
         root.mainloop()
     except Exception:
         with open(LOG_FILE, "a", encoding="utf-8") as log:
-            log.write("\n[FATAL] Bananafone failed before or during GUI startup\n")
+            log.write("\n[FATAL] SaySense failed before or during GUI startup\n")
             traceback.print_exc(file=log)
         raise

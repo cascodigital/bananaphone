@@ -1,4 +1,4 @@
-# BananaPhone v2 - Windows installer
+# SaySense - Windows installer
 #
 # Self-contained: if Python is missing it installs it (winget, with a
 # python.org fallback), then bootstraps a local venv, installs every
@@ -12,7 +12,7 @@
 #   .\install_windows.ps1 -OpenAIKey "sk-..."
 #   .\install_windows.ps1 -WithOllama        # also install Ollama + pull model
 #
-# Easiest path: just double-click Install-BananaPhone.bat (handles ExecutionPolicy).
+# Easiest path: just double-click Install-SaySense.bat (handles ExecutionPolicy).
 
 param(
     [string]$OpenAIKey = "",
@@ -27,9 +27,9 @@ $VenvDir = Join-Path $ProjectDir ".venv"
 $Python = Join-Path $VenvDir "Scripts\python.exe"
 $Pythonw = Join-Path $VenvDir "Scripts\pythonw.exe"
 $AppScript = Join-Path $ProjectDir "bananaphone_v2.py"
-$DesktopShortcut = Join-Path ([Environment]::GetFolderPath("Desktop")) "BananaPhone.lnk"
-$StartMenuDir = Join-Path ([Environment]::GetFolderPath("Programs")) "BananaPhone"
-$StartMenuShortcut = Join-Path $StartMenuDir "BananaPhone.lnk"
+$DesktopShortcut = Join-Path ([Environment]::GetFolderPath("Desktop")) "SaySense.lnk"
+$StartMenuDir = Join-Path ([Environment]::GetFolderPath("Programs")) "SaySense"
+$StartMenuShortcut = Join-Path $StartMenuDir "SaySense.lnk"
 $ConfigDir = Join-Path $env:USERPROFILE ".config\bananafone"
 $KeyFile = Join-Path $ConfigDir "ai-keys.md"
 
@@ -137,7 +137,7 @@ function New-AppShortcut($Path) {
     $Shortcut.Arguments = "`"$AppScript`""
     $Shortcut.WorkingDirectory = $ProjectDir
     $Shortcut.IconLocation = "$env:SystemRoot\System32\SHELL32.dll,220"
-    $Shortcut.Description = "BananaPhone v2 - dictation and Jira documentation"
+    $Shortcut.Description = "SaySense - dictation and Jira documentation"
     $Shortcut.Save()
 }
 
@@ -146,7 +146,7 @@ New-Item -ItemType Directory -Force -Path $StartMenuDir | Out-Null
 New-AppShortcut $StartMenuShortcut
 
 Write-Host ""
-Write-Host "BananaPhone v2 installed." -ForegroundColor Green
+Write-Host "SaySense installed." -ForegroundColor Green
 Write-Host "Desktop shortcut : $DesktopShortcut"
 Write-Host "Start Menu       : $StartMenuShortcut"
 Write-Host "Launcher         : $LauncherTarget `"$AppScript`""

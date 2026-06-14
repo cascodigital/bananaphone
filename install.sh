@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# BananaPhone v2 - Linux installer
+# SaySense - Linux installer
 #
 # Installs EVERYTHING the app needs on a clean machine:
 #   - system packages: python3 + venv, tkinter, PortAudio + build headers
@@ -18,7 +18,7 @@ set -euo pipefail
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 VENV_DIR="$REPO_DIR/.venv"
 DESKTOP_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/applications"
-DESKTOP_FILE="$DESKTOP_DIR/bananaphone-v2.desktop"
+DESKTOP_FILE="$DESKTOP_DIR/saysense.desktop"
 
 WITH_OLLAMA=0
 for arg in "$@"; do
@@ -110,10 +110,11 @@ fi
 
 # --- desktop launcher ------------------------------------------------------
 mkdir -p "$DESKTOP_DIR"
+rm -f "$DESKTOP_DIR/bananaphone-v2.desktop"
 cat > "$DESKTOP_FILE" <<EOF
 [Desktop Entry]
 Version=2.1
-Name=BananaPhone v2
+Name=SaySense
 Comment=Dictation and Jira documentation (local + API)
 Exec=$VENV_DIR/bin/python $REPO_DIR/bananaphone_v2.py
 Icon=audio-input-microphone
@@ -124,7 +125,7 @@ EOF
 chmod +x "$DESKTOP_FILE"
 
 echo
-ok "BananaPhone v2 installed."
+ok "SaySense installed."
 echo "  Launcher : $DESKTOP_FILE"
 echo "  Run      : $VENV_DIR/bin/python $REPO_DIR/bananaphone_v2.py"
 if [[ "$WITH_OLLAMA" -ne 1 ]]; then
