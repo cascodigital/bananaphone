@@ -15,6 +15,7 @@ import urllib.error
 import urllib.request
 import uuid
 import wave
+from datetime import datetime
 from io import BytesIO
 
 import customtkinter as ctk
@@ -23,13 +24,14 @@ import speech_recognition as sr
 from faster_whisper import WhisperModel
 
 APP_NAME = "BananaPhone"
-APP_VERSION = "2.3-beta"
-APP_TITLE = f"{APP_NAME} {APP_VERSION.replace('-beta', ' BETA')}"
+APP_VERSION = "1.0"
+APP_TITLE = f"{APP_NAME} {APP_VERSION}"
 CPU_THREADS = min(os.cpu_count() or 4, 8)
 LOG_DIR = os.path.expanduser("~/.local/state/bananafone")
 LOG_FILE = os.path.join(LOG_DIR, "bananaphone_v2.log")
 CONFIG_DIR = os.path.expanduser("~/.config/bananafone")
 SETTINGS_FILE = os.path.join(CONFIG_DIR, "settings_v2.json")
+JIRA_HISTORY_FILE = os.path.join(CONFIG_DIR, "jira_history.json")
 HF_CACHE_DIR = os.path.expanduser("~/.cache/huggingface/hub")
 DEFAULT_OPENAI_MODEL = os.environ.get("BANANAFONE_OPENAI_MODEL", "gpt-4o-mini-transcribe")
 DEFAULT_OPENAI_TEXT_MODEL = os.environ.get("BANANAFONE_OPENAI_TEXT_MODEL", "gpt-4o-mini")
@@ -99,6 +101,13 @@ CLOUD_TEXT_PROVIDERS = ("openai", "gemini")
 JIRA_PROMPT_MODE_BUILTIN_EXTRA = "builtin_extra"
 JIRA_PROMPT_MODE_FULL_CUSTOM = "full_custom"
 JIRA_PROMPT_MODES = (JIRA_PROMPT_MODE_BUILTIN_EXTRA, JIRA_PROMPT_MODE_FULL_CUSTOM)
+JIRA_HISTORY_LIMIT = 10
+REGENERATE_CHOICES = {
+    "Shorter": "Rewrite both fields more concisely while preserving all facts.",
+    "More technical": "Make the internal_note more technical and peer-oriented while keeping the customer_comment simple.",
+    "More customer-friendly": "Make the customer_comment warmer and easier for a non-technical end user.",
+    "Include follow-up": "Emphasize follow-up, monitoring, or next action when supported by the notes.",
+}
 
 DEFAULT_SILENCE_TIMEOUT = os.environ.get("BANANAPHONE_V2_SILENCE_TIMEOUT", "4")
 SILENCE_TIMEOUT_OPTIONS = ("4", "6", "8", "off")
@@ -280,6 +289,8 @@ class DictationApp:
         self.output_target = self.default_output_target
         self.jira_mode = self.default_jira_mode
         self.jira_raw_notes = []
+        self.jira_history = self.load_jira_history()
+        self.last_jira_output = None
         self.generating_jira = False
 
         self.build_ui()
@@ -288,6 +299,9 @@ class DictationApp:
         self.set_input_language(self.input_language, update_status=False)
         self.set_output_target(self.output_target, update_status=False)
         self.refresh_output_panel()
+        self.refresh_history_text()
+        self.refresh_jira_status()
+        self.refresh_privacy_status()
         if self.jira_mode:
             self.mode_key = self.jira_speech_mode()
             self.mode = MODES[self.mode_key]
@@ -365,6 +379,14 @@ class DictationApp:
             wraplength=480,
         )
         self.route_label.pack(pady=(0, 12))
+        self.privacy_label = ctk.CTkLabel(
+            container,
+            text="",
+            font=ctk.CTkFont(size=11, weight="bold"),
+            text_color=COLOR_MUTED,
+            wraplength=480,
+        )
+        self.privacy_label.pack(pady=(0, 10))
 
         # Main talk button ---------------------------------------------
         self.hold_button = ctk.CTkButton(
@@ -396,12 +418,29 @@ class DictationApp:
         # Jira panel ----------------------------------------------------
         self.jira_frame = ctk.CTkFrame(container, fg_color="transparent")
 
+        self.jira_status_frame = ctk.CTkFrame(self.jira_frame, fg_color="transparent")
+        self.jira_status_frame.pack(fill=tk.X, pady=(0, 6))
+        self.jira_notes_count_label = ctk.CTkLabel(
+            self.jira_status_frame,
+            text="0 notes captured",
+            font=ctk.CTkFont(size=11, weight="bold"),
+            text_color=COLOR_INFO,
+        )
+        self.jira_notes_count_label.pack(side=tk.LEFT)
+        self.last_generated_label = ctk.CTkLabel(
+            self.jira_status_frame,
+            text="Not generated yet",
+            font=ctk.CTkFont(size=11),
+            text_color=COLOR_SUBTLE,
+        )
+        self.last_generated_label.pack(side=tk.RIGHT)
+
         self.jira_actions_frame = ctk.CTkFrame(self.jira_frame, fg_color="transparent")
         self.jira_actions_frame.pack(fill=tk.X, pady=(0, 8))
 
         self.generate_jira_button = ctk.CTkButton(
             self.jira_actions_frame,
-            text="Generate JIRA",
+            text="Generate",
             font=ctk.CTkFont(size=12, weight="bold"),
             height=32,
             corner_radius=10,
@@ -423,6 +462,33 @@ class DictationApp:
             command=self.clear_jira_notes,
         )
         self.clear_notes_button.pack(side=tk.LEFT, padx=(0, 6))
+
+        self.regenerate_var = tk.StringVar(value="Shorter")
+        self.regenerate_menu = ctk.CTkOptionMenu(
+            self.jira_actions_frame,
+            variable=self.regenerate_var,
+            values=list(REGENERATE_CHOICES.keys()),
+            width=145,
+            font=ctk.CTkFont(size=12),
+            fg_color=COLOR_FIELD,
+            button_color=BTN_NEUTRAL,
+            button_hover_color=BTN_NEUTRAL_HOVER,
+            corner_radius=8,
+        )
+        self.regenerate_menu.pack(side=tk.LEFT, padx=(0, 6))
+
+        self.regenerate_button = ctk.CTkButton(
+            self.jira_actions_frame,
+            text="Regenerate",
+            width=100,
+            font=ctk.CTkFont(size=12, weight="bold"),
+            height=32,
+            corner_radius=10,
+            fg_color=BTN_NEUTRAL,
+            hover_color=BTN_NEUTRAL_HOVER,
+            command=self.regenerate_jira_output,
+        )
+        self.regenerate_button.pack(side=tk.LEFT, padx=(0, 6))
 
         self.copy_internal_button = ctk.CTkButton(
             self.jira_actions_frame,
@@ -462,10 +528,54 @@ class DictationApp:
         self.raw_notes_tab = self.jira_tabs.add("Raw Notes")
         self.customer_tab = self.jira_tabs.add("Customer")
         self.internal_tab = self.jira_tabs.add("Internal")
+        self.history_tab = self.jira_tabs.add("History")
 
         self.raw_notes_text = self._build_panel_textbox(self.raw_notes_tab)
         self.customer_text = self._build_panel_textbox(self.customer_tab)
         self.internal_text = self._build_panel_textbox(self.internal_tab)
+        self.history_text = self._build_panel_textbox(self.history_tab)
+
+        self.history_actions_frame = ctk.CTkFrame(self.history_tab, fg_color="transparent")
+        self.history_actions_frame.pack(fill=tk.X, pady=(6, 0))
+        ctk.CTkButton(
+            self.history_actions_frame,
+            text="Reopen Latest",
+            font=ctk.CTkFont(size=11, weight="bold"),
+            height=28,
+            corner_radius=8,
+            fg_color=BTN_NEUTRAL,
+            hover_color=BTN_NEUTRAL_HOVER,
+            command=self.reopen_latest_jira,
+        ).pack(side=tk.LEFT, padx=(0, 6))
+        ctk.CTkButton(
+            self.history_actions_frame,
+            text="Copy Latest Customer",
+            font=ctk.CTkFont(size=11, weight="bold"),
+            height=28,
+            corner_radius=8,
+            fg_color=BTN_NEUTRAL,
+            hover_color=BTN_NEUTRAL_HOVER,
+            command=self.copy_latest_customer,
+        ).pack(side=tk.LEFT, padx=(0, 6))
+        ctk.CTkButton(
+            self.history_actions_frame,
+            text="Copy Latest Internal",
+            font=ctk.CTkFont(size=11, weight="bold"),
+            height=28,
+            corner_radius=8,
+            fg_color=BTN_NEUTRAL,
+            hover_color=BTN_NEUTRAL_HOVER,
+            command=self.copy_latest_internal,
+        ).pack(side=tk.LEFT)
+
+        self.jira_validation_label = ctk.CTkLabel(
+            self.jira_frame,
+            text="Output not generated yet",
+            font=ctk.CTkFont(size=11),
+            text_color=COLOR_SUBTLE,
+            wraplength=480,
+        )
+        self.jira_validation_label.pack(fill=tk.X, pady=(6, 0))
 
         # Bottom bar ----------------------------------------------------
         self.bottom_frame = ctk.CTkFrame(container, fg_color="transparent")
@@ -600,6 +710,8 @@ class DictationApp:
         self.settings_button.configure(state=control_state)
         self.generate_jira_button.configure(state=control_state)
         self.clear_notes_button.configure(state=control_state)
+        self.regenerate_menu.configure(state=control_state)
+        self.regenerate_button.configure(state=control_state)
         self.copy_customer_button.configure(state=control_state)
         self.copy_internal_button.configure(state=control_state)
 
@@ -647,6 +759,41 @@ class DictationApp:
 
     def refresh_raw_notes_text(self):
         self.set_text_widget(self.raw_notes_text, "\n\n".join(self.jira_raw_notes))
+        self.refresh_jira_status()
+
+    def refresh_jira_status(self):
+        if not hasattr(self, "jira_notes_count_label"):
+            return
+        count = len(self.jira_raw_notes)
+        self.jira_notes_count_label.configure(
+            text=f"{count} note{'s' if count != 1 else ''} captured"
+        )
+        if self.last_jira_output:
+            self.last_generated_label.configure(text=f"Last generated {self.last_jira_output.get('time', '')}")
+        else:
+            self.last_generated_label.configure(text="Not generated yet")
+
+    def set_validation_status(self, messages, ok=True):
+        if not hasattr(self, "jira_validation_label"):
+            return
+        if not messages:
+            messages = ["Output structure OK"]
+            ok = True
+        self.jira_validation_label.configure(
+            text=" | ".join(messages),
+            text_color=COLOR_OK if ok else COLOR_WARN,
+        )
+
+    def refresh_history_text(self):
+        if not hasattr(self, "history_text"):
+            return
+        lines = []
+        for index, entry in enumerate(self.jira_history, start=1):
+            timestamp = entry.get("time", "")
+            customer = entry.get("customer_comment", "").replace("\n", " ").strip()
+            customer = customer[:120] + ("..." if len(customer) > 120 else "")
+            lines.append(f"{index}. {timestamp} - {customer}")
+        self.set_text_widget(self.history_text, "\n\n".join(lines) if lines else "No generated tickets yet.")
 
     def copy_customer_comment(self):
         text = self.customer_text.get("1.0", "end").strip()
@@ -659,6 +806,29 @@ class DictationApp:
         if text:
             self.copy_to_clipboard(text)
             self.update_status("Internal Note copied.", COLOR_OK)
+
+    def copy_latest_customer(self):
+        if self.jira_history:
+            self.copy_to_clipboard(self.jira_history[0].get("customer_comment", ""))
+            self.update_status("Latest Customer Comment copied.", COLOR_OK)
+
+    def copy_latest_internal(self):
+        if self.jira_history:
+            self.copy_to_clipboard(self.jira_history[0].get("internal_note", ""))
+            self.update_status("Latest Internal Note copied.", COLOR_OK)
+
+    def reopen_latest_jira(self):
+        if not self.jira_history:
+            self.update_status("No Jira history to reopen.", COLOR_WARN)
+            return
+        entry = self.jira_history[0]
+        self.jira_raw_notes = list(entry.get("raw_notes", []))
+        self.refresh_raw_notes_text()
+        self.set_jira_text(entry.get("customer_comment", ""), entry.get("internal_note", ""))
+        self.last_jira_output = {"time": entry.get("time", "")}
+        self.refresh_jira_status()
+        self.jira_tabs.set("Customer")
+        self.update_status("Latest Jira output reopened.", COLOR_OK)
 
     def clear_jira_notes(self):
         self.jira_raw_notes = []
@@ -675,14 +845,14 @@ class DictationApp:
         self.refresh_raw_notes_text()
         self.jira_tabs.set("Raw Notes")
 
-    def generate_jira_from_notes(self):
+    def generate_jira_from_notes(self, style_instruction=None):
         if self.is_recording or self.model_loading or self.refreshing_models or self.generating_jira:
             return
         notes = "\n\n".join(self.jira_raw_notes).strip()
         if not notes:
             self.update_status("No Raw Notes to generate JIRA output.", COLOR_WARN)
             return
-        if self.text_requires_key() and not self.get_openai_api_key():
+        if self.text_requires_key() and not self.text_provider_has_key():
             self.update_status("JIRA MODE needs an API key for the selected text provider. Open Settings.", COLOR_WARN)
             return
 
@@ -690,27 +860,38 @@ class DictationApp:
         self.set_mode_button_states()
         self.set_hold_button_busy("GENERATING JIRA...")
         self.update_status("Generating Customer Comment and Internal Note...", COLOR_INFO)
-        threading.Thread(target=self.generate_jira_worker, args=(notes,), daemon=True).start()
+        threading.Thread(target=self.generate_jira_worker, args=(notes, style_instruction), daemon=True).start()
 
-    def generate_jira_worker(self, notes):
+    def regenerate_jira_output(self):
+        style = REGENERATE_CHOICES.get(self.regenerate_var.get(), "")
+        self.generate_jira_from_notes(style_instruction=style)
+
+    def generate_jira_worker(self, notes, style_instruction=None):
         try:
             started = time.time()
-            output = self.transform_to_jira(notes)
+            output = self.transform_to_jira(notes, style_instruction=style_instruction)
             elapsed = time.time() - started
             customer_comment = output.get("customer_comment", "").strip()
             internal_note = output.get("internal_note", "").strip()
             if not customer_comment:
                 raise RuntimeError("JIRA output returned empty Customer Comment")
             self.copy_to_clipboard(customer_comment)
-            self.root.after(0, self.finish_generate_jira, customer_comment, internal_note, elapsed)
+            self.root.after(0, self.finish_generate_jira, customer_comment, internal_note, elapsed, notes)
         except Exception as exc:
             self.log_exception("generate_jira_worker failed")
             self.root.after(0, self.fail_generate_jira, str(exc)[:80])
 
-    def finish_generate_jira(self, customer_comment, internal_note, elapsed):
+    def finish_generate_jira(self, customer_comment, internal_note, elapsed, notes):
         self.generating_jira = False
         self.set_jira_text(customer_comment, internal_note)
         self.jira_tabs.set("Customer")
+        generated_time = datetime.now().strftime("%H:%M")
+        self.last_jira_output = {"time": generated_time}
+        self.add_jira_history_entry(notes, customer_comment, internal_note, generated_time)
+        warnings = self.validate_jira_output(customer_comment, internal_note)
+        self.set_validation_status(warnings, ok=not warnings)
+        self.refresh_jira_status()
+        self.refresh_history_text()
         self.set_mode_button_states()
         self.set_hold_button_idle()
         self.update_status(f"Customer Comment copied in {elapsed:.1f}s.", COLOR_OK)
@@ -744,6 +925,7 @@ class DictationApp:
             self.engine_var.set("Jira Mode" if self.jira_mode else MODE_LABELS.get(mode_key, "Dictate"))
         self.update_title()
         self.route_label.configure(text=self.current_route_status())
+        self.refresh_privacy_status()
         self.refresh_defaults_label()
         self.set_mode_button_states()
         self.ensure_model_loaded_async(mode_key)
@@ -757,11 +939,12 @@ class DictationApp:
         self.update_title()
         self.refresh_output_panel()
         self.route_label.configure(text=self.current_route_status())
+        self.refresh_privacy_status()
         self.refresh_defaults_label()
         self.set_hold_button_idle()
         self.set_mode_button_states()
         if enabled:
-            if self.text_requires_key() and not self.get_openai_api_key():
+            if self.text_requires_key() and not self.text_provider_has_key():
                 self.update_status("JIRA MODE needs an API key for the selected text provider. Open Settings.", COLOR_WARN)
             target_mode = self.jira_speech_mode()
             if self.mode_key != target_mode:
@@ -778,6 +961,7 @@ class DictationApp:
             self.input_var.set(LANGUAGE_LABELS.get(language_key, "English"))
         if update_status:
             self.route_label.configure(text=self.current_route_status())
+            self.refresh_privacy_status()
         self.refresh_defaults_label()
         self.set_mode_button_states()
 
@@ -789,6 +973,7 @@ class DictationApp:
             self.output_var.set(LANGUAGE_LABELS.get(target_key, "English"))
         if update_status:
             self.route_label.configure(text=self.current_route_status())
+            self.refresh_privacy_status()
         self.refresh_defaults_label()
         self.set_mode_button_states()
 
@@ -844,6 +1029,65 @@ class DictationApp:
         # transcription. This is what lets Jira Mode work when the cloud APIs
         # are firewalled.
         return "slow" if self.text_provider in CLOUD_TEXT_PROVIDERS else "normal"
+
+    def refresh_privacy_status(self):
+        if not hasattr(self, "privacy_label"):
+            return
+        speech_provider = SPEECH_PROVIDER_LABELS.get(self.api_speech_provider(), "OpenAI")
+        if self.mode.get("backend") == "api":
+            speech = speech_provider
+            audio_leaves = "Yes"
+        else:
+            speech = "Local Whisper"
+            audio_leaves = "No"
+        text = self.text_provider_short()
+        ticket_leaves = "No" if self.text_provider in ("ollama", "custom") else "Yes"
+        self.privacy_label.configure(
+            text=f"Privacy: speech={speech} (audio leaves: {audio_leaves}) | text/Jira={text} (ticket text leaves: {ticket_leaves})",
+            text_color=COLOR_OK if audio_leaves == "No" and ticket_leaves == "No" else COLOR_WARN,
+        )
+
+    def load_jira_history(self):
+        if not os.path.isfile(JIRA_HISTORY_FILE):
+            return []
+        try:
+            with open(JIRA_HISTORY_FILE, "r", encoding="utf-8") as handle:
+                data = json.load(handle)
+        except Exception:
+            return []
+        if not isinstance(data, list):
+            return []
+        return data[:JIRA_HISTORY_LIMIT]
+
+    def save_jira_history(self):
+        try:
+            with open(JIRA_HISTORY_FILE, "w", encoding="utf-8") as handle:
+                json.dump(self.jira_history[:JIRA_HISTORY_LIMIT], handle, indent=2)
+        except Exception:
+            self.log_exception("save_jira_history failed")
+
+    def add_jira_history_entry(self, notes, customer_comment, internal_note, generated_time):
+        entry = {
+            "id": uuid.uuid4().hex,
+            "timestamp": datetime.now().isoformat(timespec="seconds"),
+            "time": generated_time,
+            "raw_notes": [note for note in notes.split("\n\n") if note.strip()],
+            "customer_comment": customer_comment,
+            "internal_note": internal_note,
+        }
+        self.jira_history.insert(0, entry)
+        self.jira_history = self.jira_history[:JIRA_HISTORY_LIMIT]
+        self.save_jira_history()
+
+    def validate_jira_output(self, customer_comment, internal_note):
+        warnings = []
+        if len(customer_comment.split()) < 8:
+            warnings.append("Customer comment looks very short")
+        if "Result:" not in internal_note:
+            warnings.append("Internal note missing Result")
+        if "Issue:" not in internal_note:
+            warnings.append("Internal note missing Issue")
+        return warnings
 
     def load_settings(self):
         if not os.path.isfile(SETTINGS_FILE):
@@ -1438,6 +1682,7 @@ class DictationApp:
             )
             self.write_settings()
             self.route_label.configure(text=self.current_route_status())
+            self.refresh_privacy_status()
             self.refresh_cache_status()
             self.set_hold_button_idle()
             self.update_status("Settings saved.", COLOR_OK)
@@ -2044,6 +2289,13 @@ class DictationApp:
     def text_requires_key(self):
         # Local Ollama needs no API key; cloud/custom OpenAI-compatible do.
         return self.text_provider != "ollama"
+
+    def text_provider_has_key(self):
+        if self.text_provider == "ollama":
+            return True
+        if self.text_provider == "gemini":
+            return bool(self.get_gemini_api_key())
+        return bool(self.get_openai_api_key())
 
     def text_chat_url(self):
         return self.text_base_url.rstrip("/") + "/chat/completions"
