@@ -123,6 +123,29 @@ and SHA256 files. If the installer is blocked, download the portable zip,
 unblock the zip before extracting, and run `SaySense.exe` from the extracted
 folder.
 
+Follow-up: the portable zip extracted correctly as `SaySense.exe` plus the
+`_internal` dependency folder, but `SaySense.exe` still did not launch after the
+SmartScreen bypass on the user's Windows machine. That can still be endpoint
+policy, but it can also be a hidden runtime crash because the normal PyInstaller
+build uses `--windowed`.
+
+For `v1.2-beta.2` and later, the Windows release workflow also uploads:
+
+- `SaySense-Debug-Console-<version>.zip`: a console PyInstaller build. Run
+  `SaySense-Debug.exe` from PowerShell to see traceback/runtime errors.
+- `SaySense-Source-<version>.zip`: source + Windows installer scripts. Extract,
+  run `Install-SaySense.bat`, then launch via the generated shortcut or
+  `.venv\Scripts\pythonw.exe bananaphone_v2.py`.
+
+Portable PyInstaller structure reminder:
+
+```text
+SaySense.exe
+_internal\
+```
+
+`_internal` is not executable by itself; `SaySense.exe` must live beside it.
+
 ## Local Linux Quick Dictation Hotkey - 2026-06-14
 
 Goal: make SaySense usable without permanently occupying screen space on the
