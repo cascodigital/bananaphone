@@ -23,7 +23,7 @@ import speech_recognition as sr
 from faster_whisper import WhisperModel
 
 APP_NAME = "BananaPhone"
-APP_VERSION = "2.2-beta"
+APP_VERSION = "2.3-beta"
 APP_TITLE = f"{APP_NAME} {APP_VERSION.replace('-beta', ' BETA')}"
 CPU_THREADS = min(os.cpu_count() or 4, 8)
 LOG_DIR = os.path.expanduser("~/.local/state/bananafone")
@@ -96,9 +96,12 @@ PROVIDER_DEFAULT_BASE_URL = {
     "custom": DEFAULT_OLLAMA_BASE_URL,
 }
 CLOUD_TEXT_PROVIDERS = ("openai", "gemini")
+JIRA_PROMPT_MODE_BUILTIN_EXTRA = "builtin_extra"
+JIRA_PROMPT_MODE_FULL_CUSTOM = "full_custom"
+JIRA_PROMPT_MODES = (JIRA_PROMPT_MODE_BUILTIN_EXTRA, JIRA_PROMPT_MODE_FULL_CUSTOM)
 
 DEFAULT_SILENCE_TIMEOUT = os.environ.get("BANANAPHONE_V2_SILENCE_TIMEOUT", "4")
-SILENCE_TIMEOUT_OPTIONS = ("4", "7", "10", "off")
+SILENCE_TIMEOUT_OPTIONS = ("4", "6", "8", "off")
 MIN_SPEECH_SECONDS = float(os.environ.get("BANANAFONE_MIN_SPEECH_SECONDS", "0.35"))
 SILENCE_RMS_MULTIPLIER = float(os.environ.get("BANANAFONE_SILENCE_RMS_MULTIPLIER", "1.35"))
 
@@ -249,6 +252,9 @@ class DictationApp:
         self.text_base_url = self.settings.get("text_base_url", "") or PROVIDER_DEFAULT_BASE_URL.get(
             self.text_provider, DEFAULT_OPENAI_BASE_URL
         )
+        self.jira_extra_instructions = self.settings.get("jira_extra_instructions", "")
+        self.jira_prompt_mode = self.settings.get("jira_prompt_mode", JIRA_PROMPT_MODE_BUILTIN_EXTRA)
+        self.jira_custom_prompt = self.settings.get("jira_custom_prompt", "")
         self.mode_key = self.default_mode_key
         self.mode = MODES[self.mode_key]
         self.model = None
@@ -876,6 +882,11 @@ class DictationApp:
             silence_timeout = DEFAULT_SILENCE_TIMEOUT
         text_model = str(settings.get("text_model", "")).strip()
         text_base_url = str(settings.get("text_base_url", "")).strip()
+        jira_extra_instructions = str(settings.get("jira_extra_instructions", "")).strip()
+        jira_prompt_mode = str(settings.get("jira_prompt_mode", JIRA_PROMPT_MODE_BUILTIN_EXTRA)).strip()
+        if jira_prompt_mode not in JIRA_PROMPT_MODES:
+            jira_prompt_mode = JIRA_PROMPT_MODE_BUILTIN_EXTRA
+        jira_custom_prompt = str(settings.get("jira_custom_prompt", "")).strip()
         return {
             "default_mode": default_mode,
             "default_input_language": default_input_language,
@@ -887,6 +898,9 @@ class DictationApp:
             "text_provider": text_provider,
             "text_model": text_model,
             "text_base_url": text_base_url,
+            "jira_extra_instructions": jira_extra_instructions,
+            "jira_prompt_mode": jira_prompt_mode,
+            "jira_custom_prompt": jira_custom_prompt,
         }
 
     def write_settings(self):
@@ -901,6 +915,9 @@ class DictationApp:
             "text_provider": self.text_provider,
             "text_model": self.text_model,
             "text_base_url": self.text_base_url,
+            "jira_extra_instructions": self.jira_extra_instructions,
+            "jira_prompt_mode": self.jira_prompt_mode,
+            "jira_custom_prompt": self.jira_custom_prompt,
         }
         with open(SETTINGS_FILE, "w", encoding="utf-8") as handle:
             json.dump(settings, handle, indent=2)
@@ -951,7 +968,7 @@ class DictationApp:
         silence_var = tk.StringVar(value=self.silence_timeout_setting)
         timeout_frame = ctk.CTkFrame(body, fg_color="transparent")
         timeout_frame.pack(anchor="w", pady=(6, 16))
-        for value, label in (("4", "4s"), ("7", "7s"), ("10", "10s"), ("off", "Off")):
+        for value, label in (("4", "4s"), ("6", "6s"), ("8", "8s"), ("off", "Off")):
             ctk.CTkRadioButton(
                 timeout_frame,
                 text=label,
@@ -1380,22 +1397,30 @@ class DictationApp:
 
         ctk.CTkLabel(
             body,
-            text="Local speech models",
+            text="Jira behavior",
             font=ctk.CTkFont(size=13, weight="bold"),
             text_color=COLOR_TITLE,
         ).pack(anchor="w")
 
-        self.refresh_button = ctk.CTkButton(
-            body,
-            text="Download Models",
+        jira_row = ctk.CTkFrame(body, fg_color="transparent")
+        jira_row.pack(fill=tk.X, pady=(6, 16))
+        ctk.CTkButton(
+            jira_row,
+            text="Jira Extra Instructions...",
             font=ctk.CTkFont(size=12, weight="bold"),
             height=32,
             corner_radius=10,
             fg_color=BTN_NEUTRAL,
             hover_color=BTN_NEUTRAL_HOVER,
-            command=self.refresh_models,
+            command=self.open_jira_instructions_window,
+        ).pack(side=tk.LEFT)
+        self.jira_instructions_status_label = ctk.CTkLabel(
+            jira_row,
+            text=self.jira_instructions_status(),
+            font=ctk.CTkFont(size=11),
+            text_color=COLOR_MUTED,
         )
-        self.refresh_button.pack(anchor="w", pady=(6, 18))
+        self.jira_instructions_status_label.pack(side=tk.LEFT, padx=(10, 0))
 
         buttons = ctk.CTkFrame(body, fg_color="transparent")
         buttons.pack(side=tk.BOTTOM, anchor="e")
@@ -1441,6 +1466,250 @@ class DictationApp:
             fg_color=BTN_GOOD,
             hover_color=BTN_GOOD_HOVER,
             command=save_settings,
+        ).pack(side=tk.LEFT)
+
+    def jira_instructions_status(self):
+        if self.jira_prompt_mode == JIRA_PROMPT_MODE_FULL_CUSTOM:
+            return "Full custom prompt active"
+        if self.jira_extra_instructions.strip():
+            return "Extra instructions active"
+        return "Built-in defaults"
+
+    def refresh_jira_instructions_status_label(self):
+        label = getattr(self, "jira_instructions_status_label", None)
+        if label is not None and label.winfo_exists():
+            label.configure(text=self.jira_instructions_status())
+
+    def open_jira_instructions_window(self):
+        if self.is_recording or self.generating_jira:
+            return
+
+        dialog = ctk.CTkToplevel(self.root)
+        dialog.title("Jira Extra Instructions")
+        dialog.geometry("640x720")
+        dialog.configure(fg_color=COLOR_WINDOW)
+        dialog.transient(self.root)
+        dialog.after(50, dialog.grab_set)
+
+        body = ctk.CTkFrame(dialog, fg_color="transparent")
+        body.pack(fill=tk.BOTH, expand=True, padx=22, pady=20)
+
+        ctk.CTkLabel(
+            body,
+            text="Jira Extra Instructions",
+            font=ctk.CTkFont(size=15, weight="bold"),
+            text_color=COLOR_TITLE,
+        ).pack(anchor="w")
+        ctk.CTkLabel(
+            body,
+            text="Added after the built-in Jira rules. Use this for client-specific tone, section names, or documentation habits.",
+            font=ctk.CTkFont(size=11),
+            text_color=COLOR_SUBTLE,
+            wraplength=560,
+            justify="left",
+        ).pack(anchor="w", pady=(2, 8))
+
+        extra_box = ctk.CTkTextbox(
+            body,
+            height=150,
+            font=ctk.CTkFont(size=12),
+            fg_color=COLOR_FIELD,
+            border_color=COLOR_CARD_BORDER,
+            border_width=1,
+            corner_radius=10,
+            wrap="word",
+        )
+        extra_box.pack(fill=tk.X, pady=(0, 12))
+        extra_box.insert("1.0", self.jira_extra_instructions)
+
+        advanced_var = tk.BooleanVar(value=self.jira_prompt_mode == JIRA_PROMPT_MODE_FULL_CUSTOM)
+        advanced_toggle = ctk.CTkCheckBox(
+            body,
+            text="Show advanced prompt override",
+            variable=advanced_var,
+            font=ctk.CTkFont(size=12),
+            fg_color=BTN_PRIMARY,
+            hover_color=BTN_PRIMARY_HOVER,
+        )
+        advanced_toggle.pack(anchor="w", pady=(0, 8))
+
+        advanced_frame = ctk.CTkFrame(body, fg_color=COLOR_CARD, corner_radius=10)
+        ctk.CTkLabel(
+            advanced_frame,
+            text="Full custom Jira prompt",
+            font=ctk.CTkFont(size=13, weight="bold"),
+            text_color=COLOR_TITLE,
+        ).pack(anchor="w", padx=12, pady=(12, 2))
+        ctk.CTkLabel(
+            advanced_frame,
+            text="Replaces the built-in Jira instructions. If it does not return JSON with customer_comment and internal_note, generation fails.",
+            font=ctk.CTkFont(size=11),
+            text_color=COLOR_WARN,
+            wraplength=550,
+            justify="left",
+        ).pack(anchor="w", padx=12, pady=(0, 8))
+        custom_box = ctk.CTkTextbox(
+            advanced_frame,
+            height=170,
+            font=ctk.CTkFont(size=12),
+            fg_color=COLOR_FIELD,
+            border_color=COLOR_CARD_BORDER,
+            border_width=1,
+            corner_radius=10,
+            wrap="word",
+        )
+        custom_box.pack(fill=tk.X, padx=12, pady=(0, 10))
+        custom_box.insert("1.0", self.jira_custom_prompt)
+
+        def update_advanced_visibility():
+            if advanced_var.get():
+                advanced_frame.pack(fill=tk.X, pady=(0, 12))
+            else:
+                advanced_frame.pack_forget()
+
+        advanced_toggle.configure(command=update_advanced_visibility)
+        update_advanced_visibility()
+
+        status_label = ctk.CTkLabel(
+            body,
+            text="",
+            font=ctk.CTkFont(size=11),
+            text_color=COLOR_MUTED,
+            wraplength=560,
+            justify="left",
+        )
+        status_label.pack(anchor="w", pady=(0, 8))
+
+        def set_status(message, color=COLOR_MUTED):
+            if status_label.winfo_exists():
+                status_label.configure(text=message, text_color=color)
+
+        def current_prompt_values():
+            extra = extra_box.get("1.0", "end").strip()
+            custom = custom_box.get("1.0", "end").strip()
+            mode = JIRA_PROMPT_MODE_FULL_CUSTOM if advanced_var.get() else JIRA_PROMPT_MODE_BUILTIN_EXTRA
+            return mode, extra, custom
+
+        def save_values(close_dialog=True):
+            mode, extra, custom = current_prompt_values()
+            if mode == JIRA_PROMPT_MODE_FULL_CUSTOM and not custom:
+                set_status("Full custom prompt is enabled but empty.", COLOR_ERROR)
+                return False
+            self.jira_prompt_mode = mode
+            self.jira_extra_instructions = extra
+            self.jira_custom_prompt = custom
+            self.write_settings()
+            self.refresh_jira_instructions_status_label()
+            self.update_status("Jira instructions saved.", COLOR_OK)
+            set_status("Saved.", COLOR_OK)
+            if close_dialog:
+                dialog.destroy()
+            return True
+
+        def clear_extra():
+            extra_box.delete("1.0", "end")
+            set_status("Extra instructions cleared. Click Save to keep it.", COLOR_WARN)
+
+        def restore_builtin():
+            advanced_var.set(False)
+            extra_box.delete("1.0", "end")
+            custom_box.delete("1.0", "end")
+            update_advanced_visibility()
+            set_status("Built-in prompt restored. Click Save to keep it.", COLOR_WARN)
+
+        def test_worker(mode, extra, custom):
+            try:
+                source_name = LANGUAGES[self.input_language]["name"]
+                language_name = LANGUAGES[self.output_target]["name"]
+                prompt = self.build_jira_system_prompt(source_name, language_name, mode, extra, custom)
+                sample_note = (
+                    "User reported that Outlook was not opening and showed an authentication error. "
+                    "Checked M365 sign-in status, restarted Outlook, cleared cached credentials, and confirmed mail is syncing again. "
+                    "No further action required."
+                )
+                content = self.run_text_chat(
+                    [
+                        {"role": "system", "content": prompt},
+                        {"role": "user", "content": sample_note},
+                    ],
+                    json_mode=True,
+                )
+                try:
+                    parsed = json.loads(content)
+                except json.JSONDecodeError:
+                    parsed = self.extract_json_object(content)
+                customer = str(parsed.get("customer_comment", "")).strip()
+                internal = str(parsed.get("internal_note", "")).strip()
+                if not customer or not internal:
+                    raise RuntimeError("Missing customer_comment or internal_note")
+                self.root.after(0, set_status, "Test OK: prompt returned valid Jira JSON.", COLOR_OK)
+            except Exception as exc:
+                self.root.after(0, set_status, f"Test failed: {str(exc)[:120]}", COLOR_ERROR)
+
+        def start_test():
+            mode, extra, custom = current_prompt_values()
+            if mode == JIRA_PROMPT_MODE_FULL_CUSTOM and not custom:
+                set_status("Full custom prompt is enabled but empty.", COLOR_ERROR)
+                return
+            set_status("Testing prompt with a sample note...", COLOR_WARN)
+            threading.Thread(target=test_worker, args=(mode, extra, custom), daemon=True).start()
+
+        buttons = ctk.CTkFrame(body, fg_color="transparent")
+        buttons.pack(side=tk.BOTTOM, anchor="e")
+        ctk.CTkButton(
+            buttons,
+            text="Test",
+            width=90,
+            font=ctk.CTkFont(size=12, weight="bold"),
+            height=34,
+            corner_radius=10,
+            fg_color=BTN_NEUTRAL,
+            hover_color=BTN_NEUTRAL_HOVER,
+            command=start_test,
+        ).pack(side=tk.LEFT, padx=(0, 8))
+        ctk.CTkButton(
+            buttons,
+            text="Clear Extra",
+            width=100,
+            font=ctk.CTkFont(size=12, weight="bold"),
+            height=34,
+            corner_radius=10,
+            fg_color=BTN_NEUTRAL,
+            hover_color=BTN_NEUTRAL_HOVER,
+            command=clear_extra,
+        ).pack(side=tk.LEFT, padx=(0, 8))
+        ctk.CTkButton(
+            buttons,
+            text="Restore Built-in",
+            width=130,
+            font=ctk.CTkFont(size=12, weight="bold"),
+            height=34,
+            corner_radius=10,
+            fg_color=BTN_DANGER,
+            hover_color=BTN_DANGER_HOVER,
+            command=restore_builtin,
+        ).pack(side=tk.LEFT, padx=(0, 8))
+        ctk.CTkButton(
+            buttons,
+            text="Cancel",
+            width=90,
+            font=ctk.CTkFont(size=12, weight="bold"),
+            height=34,
+            corner_radius=10,
+            fg_color=BTN_NEUTRAL,
+            hover_color=BTN_NEUTRAL_HOVER,
+            command=dialog.destroy,
+        ).pack(side=tk.LEFT, padx=(0, 8))
+        ctk.CTkButton(
+            buttons,
+            text="Save",
+            width=90,
+            font=ctk.CTkFont(size=12, weight="bold"),
+            height=34,
+            corner_radius=10,
+            fg_color=BTN_GOOD,
+            hover_color=BTN_GOOD_HOVER,
+            command=lambda: save_values(close_dialog=True),
         ).pack(side=tk.LEFT)
 
     def ensure_model_loaded_async(self, mode_key):
@@ -1973,10 +2242,17 @@ class DictationApp:
             ]
         )
 
-    def transform_to_jira(self, text):
-        source_name = LANGUAGES[self.input_language]["name"]
-        language_name = LANGUAGES[self.output_target]["name"]
-        system_prompt = (
+    def build_jira_system_prompt(self, source_name, language_name, mode=None, extra=None, custom=None):
+        mode = mode or self.jira_prompt_mode
+        extra = self.jira_extra_instructions if extra is None else extra
+        custom = self.jira_custom_prompt if custom is None else custom
+        if mode == JIRA_PROMPT_MODE_FULL_CUSTOM:
+            prompt = custom.strip()
+            if not prompt:
+                raise RuntimeError("Full custom Jira prompt is empty")
+            return prompt
+
+        prompt = (
             f"You are a senior IT support engineer turning ticket notes into clean Jira documentation "
             f"written in {language_name}. The notes were dictated (originally in {source_name}, possibly "
             "already cleaned up), may be out of order, and may contain leftover speech-to-text artifacts. "
@@ -2006,6 +2282,18 @@ class DictationApp:
             "- If the dictation is too thin to fill a section, leave it out rather than padding it.\n"
             "- Both fields must be written in fluent, native-level {language_name}.\n"
         ).replace("{language_name}", language_name)
+        extra = extra.strip()
+        if extra:
+            prompt += (
+                "\n\n=== JIRA EXTRA INSTRUCTIONS (USER CONFIGURED) ===\n"
+                f"{extra}\n"
+            )
+        return prompt
+
+    def transform_to_jira(self, text):
+        source_name = LANGUAGES[self.input_language]["name"]
+        language_name = LANGUAGES[self.output_target]["name"]
+        system_prompt = self.build_jira_system_prompt(source_name, language_name)
 
         content = self.run_text_chat(
             [
@@ -2019,10 +2307,13 @@ class DictationApp:
         except json.JSONDecodeError:
             parsed = self.extract_json_object(content)
 
-        return {
+        result = {
             "customer_comment": str(parsed.get("customer_comment", "")).strip(),
             "internal_note": str(parsed.get("internal_note", "")).strip(),
         }
+        if not result["customer_comment"] or not result["internal_note"]:
+            raise RuntimeError("JIRA output missing customer_comment or internal_note")
+        return result
 
     def extract_json_object(self, text):
         start = text.find("{")
