@@ -32,6 +32,8 @@ implemented.
 - Tags containing `beta`, such as `v1.2-beta`, publish prereleases.
 - GitHub Actions builds:
   - Windows: `SaySense-Setup-<version>.exe`
+  - Windows portable: `SaySense-Portable-<version>.zip`
+  - Windows checksums: `SaySense-*.sha256`
   - Linux: `SaySense-<version>-x86_64.AppImage`
 - The active SaySense repository is `cascodigital/saysense`.
 - The historical BananaPhone v2 repository is `cascodigital/bananaphone_v2`.
@@ -86,6 +88,40 @@ asks; use `py_compile`, static imports, and package/release checks first.
 - Add call-note timestamps in Jira Mode.
 - Add global hotkeys for push-to-talk and Jira actions.
 - Add in-app update check and improve Windows signing/trust.
+
+## Windows Installer Trust Note - 2026-06-14
+
+The `v1.2-beta` Windows installer asset downloaded correctly and was a valid PE
+file, but a Windows test machine reported:
+
+```text
+Windows cannot access the specified device, path, or file. You may not have the permissions.
+```
+
+This is not the normal SmartScreen `Run anyway` path. When the message appears
+immediately, including when running as administrator, the likely causes are:
+
+- Windows Defender or another AV blocked/quarantined the unsigned package.
+- The downloaded file kept a blocked Mark-of-the-Web zone flag.
+- Enterprise policy/AppLocker blocked execution from the download path.
+
+Immediate user-side checks:
+
+```powershell
+Get-FileHash .\SaySense-Setup-1.2-beta.exe -Algorithm SHA256
+Unblock-File .\SaySense-Setup-1.2-beta.exe
+```
+
+Expected SHA256 for `v1.2-beta` installer:
+
+```text
+a45bd54e4d038c363579bdd5a6bb597402b31822a1781007a727505a885cdc6d
+```
+
+For `v1.2-beta.1` and later, the release workflow also uploads a portable zip
+and SHA256 files. If the installer is blocked, download the portable zip,
+unblock the zip before extracting, and run `SaySense.exe` from the extracted
+folder.
 
 ## Local Linux Quick Dictation Hotkey - 2026-06-14
 

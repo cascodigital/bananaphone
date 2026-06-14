@@ -142,6 +142,13 @@ download.
 - The `Ctrl+Shift` hotkey works while the window is focused (not global).
 - `PT -> EN` / `EN -> PT` use OpenAI to convert the transcription before copying.
 - `PT -> PT` / `EN -> EN` copy the transcription directly.
+- If Windows shows `Windows cannot access the specified device, path, or file`
+  immediately when opening the installer, check Windows Security protection
+  history. Defender may have blocked the unsigned PyInstaller/Inno package
+  before SmartScreen can show `Run anyway`.
+- If the installer is blocked, download the portable zip from the same release,
+  run `Unblock-File` on the zip before extracting, then launch `SaySense.exe`
+  from the extracted folder.
 - If `PyAudio` fails to install, update Python/pip first. On modern Windows with
   Python 3.10+ it normally installs from a wheel.
 - For personal use you may keep an `install_windows_private.ps1` with an embedded
