@@ -1,6 +1,6 @@
 # SaySense — Dictation & Jira Notes
 
-![Status](https://img.shields.io/badge/Status-1.3%20Beta-blue)
+![Status](https://img.shields.io/badge/Status-1.4%20Beta-blue)
 ![License](https://img.shields.io/badge/License-MIT-blue)
 ![Python](https://img.shields.io/badge/Python-3.10+-3776AB?style=flat-square&logo=python&logoColor=white)
 ![OpenAI](https://img.shields.io/badge/OpenAI-STT%20%2B%20Text-412991?style=flat-square&logo=openai&logoColor=white)
@@ -55,7 +55,7 @@ Working support tickets in a second language means constantly juggling a transla
 
 ## Download
 
-Latest release: **v1.3-beta** on the [SaySense Releases page](https://github.com/cascodigital/saysense/releases).
+Latest release: **v1.4-beta** on the [SaySense Releases page](https://github.com/cascodigital/saysense/releases).
 
 ## Run from source
 

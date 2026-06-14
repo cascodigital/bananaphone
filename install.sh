@@ -148,7 +148,7 @@ send_record_command() {
     id="\$(date +%s%N)"
   fi
   tmp="\$(mktemp "\$CONFIG_DIR/command.json.XXXXXX")"
-  printf '{"id":"%s","action":"start_hotkey_recording","created_at":%s}\n' "\$id" "\$(date +%s)" > "\$tmp"
+  printf '{"id":"%s","action":"toggle_quick_dictation","created_at":%s}\n' "\$id" "\$(date +%s)" > "\$tmp"
   mv "\$tmp" "\$COMMAND_FILE"
 }
 

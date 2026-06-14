@@ -139,7 +139,10 @@ download.
 ## Notes
 
 - Clipboard uses native PowerShell `Set-Clipboard`.
-- The `Ctrl+Shift` hotkey works while the window is focused (not global).
+- `Ctrl+Shift+D` toggles quick dictation globally while SaySense is running:
+  press once to start, press again to stop/transcribe. If global hooking is
+  blocked by Windows policy, the same shortcut still works while the window is
+  focused.
 - `PT -> EN` / `EN -> PT` use OpenAI to convert the transcription before copying.
 - `PT -> PT` / `EN -> EN` copy the transcription directly.
 - If Windows shows `Windows cannot access the specified device, path, or file`
