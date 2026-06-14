@@ -1,5 +1,7 @@
 # SaySense — Push-to-Talk Dictation & Jira Notes
 
+> **Project lineage:** BananaPhone v1 ([cascodigital/bananafone](https://github.com/cascodigital/bananafone)) → BananaPhone v2 ([cascodigital/bananaphone_v2](https://github.com/cascodigital/bananaphone_v2)) → **SaySense** (this repo)
+
 ![Status](https://img.shields.io/badge/Status-1.0%20Beta-yellow)
 ![License](https://img.shields.io/badge/License-MIT-blue)
 ![Python](https://img.shields.io/badge/Python-3.10+-3776AB?style=flat-square&logo=python&logoColor=white)
@@ -54,22 +56,22 @@ Working support tickets in a second language means constantly juggling a transla
 
 ## Download
 
-Prebuilt packages are on the [Releases page](https://github.com/cascodigital/bananaphone_v2/releases) — no Python required:
+Prebuilt packages are on the [Releases page](https://github.com/cascodigital/saysense/releases) — no Python required:
 
 | Platform | File | Install |
 |----------|------|---------|
 | **Windows** | `SaySense-Setup-<version>.exe` | Run the wizard. Per-user install, no admin needed. Unsigned binary — accept the SmartScreen prompt |
 | **Linux** | `SaySense-<version>-x86_64.AppImage` | `chmod +x` and run. Works on any modern distro |
 
-> Version 1.0 Beta is the first public-name support-workflow release. If something breaks, open an issue in the private repo with the log from `~/.config/bananafone/` (Linux) or `%USERPROFILE%\.config\bananafone\` (Windows).
+> Version 1.0 Beta is the first public-name support-workflow release. If something breaks, [open an issue](https://github.com/cascodigital/saysense/issues) with the log from `~/.config/bananafone/` (Linux) or `%USERPROFILE%\.config\bananafone\` (Windows).
 
 ## Run from source
 
 ### Linux
 
 ```bash
-git clone https://github.com/cascodigital/bananaphone_v2.git
-cd bananaphone_v2
+git clone https://github.com/cascodigital/saysense.git
+cd saysense
 ./install.sh                # app + all dependencies (apt/dnf/pacman auto-detected)
 ./install.sh --with-ollama  # also install Ollama for offline text/Jira
 ./.venv/bin/python bananaphone_v2.py
