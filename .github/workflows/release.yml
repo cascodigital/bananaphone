@@ -45,12 +45,22 @@ jobs:
         run: |
           $version = "${{ github.ref_name }}".TrimStart("v")
           & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" /DMyAppVersion=$version packaging\installer.iss
+          Compress-Archive -Path dist\SaySense\* -DestinationPath "SaySense-Portable-$version.zip" -Force
+          Get-FileHash "packaging\Output\SaySense-Setup-$version.exe" -Algorithm SHA256 |
+            ForEach-Object { "$($_.Hash.ToLower())  SaySense-Setup-$version.exe" } |
+            Set-Content "SaySense-Setup-$version.exe.sha256"
+          Get-FileHash "SaySense-Portable-$version.zip" -Algorithm SHA256 |
+            ForEach-Object { "$($_.Hash.ToLower())  SaySense-Portable-$version.zip" } |
+            Set-Content "SaySense-Portable-$version.zip.sha256"
 
       - name: Upload to release
         uses: softprops/action-gh-release@v2
         with:
           prerelease: ${{ contains(github.ref_name, 'beta') }}
-          files: packaging/Output/SaySense-Setup-*.exe
+          files: |
+            packaging/Output/SaySense-Setup-*.exe
+            SaySense-Portable-*.zip
+            SaySense-*.sha256
 
   linux-appimage:
     runs-on: ubuntu-22.04
