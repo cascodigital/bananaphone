@@ -24,7 +24,7 @@ import speech_recognition as sr
 from faster_whisper import WhisperModel
 
 APP_NAME = "SaySense"
-APP_VERSION = "1.1"
+APP_VERSION = "1.2 Beta"
 APP_TITLE = f"{APP_NAME} {APP_VERSION}"
 CPU_THREADS = min(os.cpu_count() or 4, 8)
 LOG_DIR = os.path.expanduser("~/.local/state/bananafone")
@@ -32,6 +32,7 @@ LOG_FILE = os.path.join(LOG_DIR, "bananaphone_v2.log")
 CONFIG_DIR = os.path.expanduser("~/.config/bananafone")
 SETTINGS_FILE = os.path.join(CONFIG_DIR, "settings_v2.json")
 JIRA_HISTORY_FILE = os.path.join(CONFIG_DIR, "jira_history.json")
+COMMAND_FILE = os.path.join(CONFIG_DIR, "command.json")
 HF_CACHE_DIR = os.path.expanduser("~/.cache/huggingface/hub")
 DEFAULT_OPENAI_MODEL = os.environ.get("BANANAFONE_OPENAI_MODEL", "gpt-4o-mini-transcribe")
 DEFAULT_OPENAI_TEXT_MODEL = os.environ.get("BANANAFONE_OPENAI_TEXT_MODEL", "gpt-4o-mini")
@@ -279,7 +280,10 @@ class DictationApp:
         self.ctrl_pressed = False
         self.shift_pressed = False
         self.hotkey_recording = False
+        self.hide_after_hotkey_recording = False
         self.transcription_thread = None
+        self.last_command_id = None
+        self.pending_hotkey_recording = False
         self.refreshing_models = False
         self.refresh_button = None
         self.energy_floor = 0
@@ -306,6 +310,7 @@ class DictationApp:
             self.mode_key = self.jira_speech_mode()
             self.mode = MODES[self.mode_key]
         self.select_mode(self.mode_key)
+        self.poll_command_file()
 
     # ------------------------------------------------------------------ UI
     def build_ui(self):
@@ -373,7 +378,7 @@ class DictationApp:
 
         self.route_label = ctk.CTkLabel(
             container,
-            text="Click to talk. Auto-stops after silence. Ctrl+Shift works while focused.",
+            text="Click to talk. Auto-stops after silence. Ctrl+Shift+D starts quick dictation.",
             font=ctk.CTkFont(size=11),
             text_color=COLOR_SUBTLE,
             wraplength=480,
@@ -1012,7 +1017,7 @@ class DictationApp:
         if self.mode.get("backend") == "api":
             provider_label = SPEECH_PROVIDER_LABELS.get(self.api_speech_provider(), "OpenAI")
             mode_status = f"{provider_label} cloud transcription for higher precision."
-        return f"{mode_status} | Input: {input_name} | Output: {output_name}{mode_label} | Silence: {timeout}{text_ai}"
+        return f"{mode_status} | Input: {input_name} | Output: {output_name}{mode_label} | Silence: {timeout}{text_ai} | Quick: Ctrl+Shift+D"
 
     def source_language(self):
         return self.input_language
@@ -2016,6 +2021,9 @@ class DictationApp:
         self.set_hold_button_idle()
         self.refresh_cache_status()
         self.update_status(f"{self.mode['label']} mode ready in {elapsed:.1f}s.", COLOR_OK)
+        if self.pending_hotkey_recording:
+            self.pending_hotkey_recording = False
+            self.root.after(100, self.start_hotkey_recording_command)
 
     def fail_loading_mode(self, error_text):
         self.model_loading = False
@@ -2048,19 +2056,62 @@ class DictationApp:
     def maybe_start_hotkey_recording(self):
         if self.ctrl_pressed and self.shift_pressed and not self.hotkey_recording:
             self.hotkey_recording = True
-            self.start_recording()
+            self.start_recording(from_hotkey=True)
 
     def maybe_stop_hotkey_recording(self):
         if self.hotkey_recording and not (self.ctrl_pressed and self.shift_pressed):
             self.hotkey_recording = False
             self.stop_recording()
 
-    def start_recording(self):
+    def poll_command_file(self):
+        try:
+            with open(COMMAND_FILE, "r", encoding="utf-8") as command_file:
+                command = json.load(command_file)
+            command_id = command.get("id")
+            created_at = float(command.get("created_at", 0))
+            if created_at and time.time() - created_at > 15:
+                return
+            if command_id and command_id != self.last_command_id:
+                self.last_command_id = command_id
+                self.handle_external_command(command)
+        except FileNotFoundError:
+            pass
+        except Exception as exc:
+            self.log_exception(f"poll_command_file failed: {exc}")
+        finally:
+            self.root.after(150, self.poll_command_file)
+
+    def handle_external_command(self, command):
+        if command.get("action") == "start_hotkey_recording":
+            self.start_hotkey_recording_command()
+
+    def start_hotkey_recording_command(self):
+        try:
+            self.root.deiconify()
+            self.root.lift()
+            self.root.focus_force()
+        except Exception:
+            pass
+
+        if self.is_recording:
+            self.stop_recording()
+            return
+
+        if self.model_loading or self.model is None or self.source is None:
+            self.pending_hotkey_recording = True
+            self.update_status("Preparing recording engine...", COLOR_WARN)
+            return
+
+        self.hotkey_recording = True
+        self.start_recording(from_hotkey=True)
+
+    def start_recording(self, from_hotkey=False):
         if self.is_recording or self.model_loading or self.model is None or self.source is None:
             return
 
         self.audio_chunks = []
         self.is_recording = True
+        self.hide_after_hotkey_recording = from_hotkey
         self.stop_requested = False
         self.set_mode_button_states()
         self.set_hold_button_recording()
@@ -2087,6 +2138,16 @@ class DictationApp:
         self.update_status(f"Transcribing with {self.mode['label']} mode...", COLOR_INFO)
         self.transcription_thread = threading.Thread(target=self.process_audio, daemon=True)
         self.transcription_thread.start()
+
+    def hide_if_hotkey_recording(self):
+        if not self.hide_after_hotkey_recording:
+            return
+
+        self.hide_after_hotkey_recording = False
+        try:
+            self.root.after(250, self.root.iconify)
+        except Exception:
+            pass
 
     def capture_audio_loop(self):
         try:
@@ -2167,6 +2228,7 @@ class DictationApp:
         self.set_mode_button_states()
         self.set_hold_button_idle()
         self.update_status("No audio captured. Try again.", COLOR_ERROR)
+        self.hide_if_hotkey_recording()
 
     def after_transcription_success(self, text, elapsed, language_probability):
         confidence = f"{language_probability:.2f}" if language_probability is not None else "n/a"
@@ -2186,16 +2248,20 @@ class DictationApp:
             f"{copied_label} in {elapsed:.1f}s. {source_label} confidence: {confidence}",
             COLOR_OK,
         )
+        self.hide_if_hotkey_recording()
 
     def after_transcription_error(self, error_text):
         self.set_mode_button_states()
         self.set_hold_button_idle()
         self.update_status(error_text, COLOR_ERROR)
+        self.hide_if_hotkey_recording()
 
     def handle_capture_failure(self, error_text):
         self.is_recording = False
         self.stop_requested = False
         self.hotkey_recording = False
+        self.hide_after_hotkey_recording = False
+        self.pending_hotkey_recording = False
         self.audio_chunks = []
         self.set_mode_button_states()
         self.set_hold_button_idle()
