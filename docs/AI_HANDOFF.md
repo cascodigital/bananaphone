@@ -3,7 +3,7 @@
 ## Current Product Identity
 
 - Public product name: **SaySense**
-- Version line: **1.3 Beta**
+- Version line: **1.4 Beta**
 - Tagline: **You speak. It makes sense.**
 - Internal repository / historical codename: `bananaphone_v2`
 - Legacy app kept for reference: `bananafone.py` / `README_V1.md`
@@ -29,7 +29,7 @@ implemented.
 
 ## Release Rules
 
-- Tags containing `beta`, such as `v1.3-beta`, publish prereleases.
+- Tags containing `beta`, such as `v1.4-beta`, publish prereleases.
 - GitHub Actions builds:
   - Windows installer: `SaySense-Setup-<version>.exe`
   - Windows source zip: `SaySense-Source-<version>.zip`
@@ -88,7 +88,7 @@ asks; use `py_compile`, static imports, and package/release checks first.
 - Add Jira documentation profiles instead of making users edit prompts first.
 - Add Settings tabs or a scrollable Settings layout.
 - Add call-note timestamps in Jira Mode.
-- Add global hotkeys for push-to-talk and Jira actions.
+- Add dedicated Jira action hotkeys.
 - Add in-app update check and improve Windows signing/trust.
 
 ## Windows Installer Trust Note - 2026-06-14
@@ -131,7 +131,7 @@ SmartScreen bypass on the user's Windows machine. That can still be endpoint
 policy, but it can also be a hidden runtime crash because the normal PyInstaller
 build uses `--windowed`.
 
-For `v1.3-beta` and later, the Windows release workflow also uploads:
+For `v1.4-beta` and later, the Windows release workflow also uploads:
 
 - `SaySense-Debug-Console-<version>.zip`: a console PyInstaller build. Run
   `SaySense-Debug.exe` from PowerShell to see traceback/runtime errors.
@@ -195,7 +195,7 @@ Wrapper behavior:
 - Command payload format:
 
 ```json
-{"id":"<uuid-or-timestamp>","action":"start_hotkey_recording","created_at":1781469296}
+{"id":"<uuid-or-timestamp>","action":"toggle_quick_dictation","created_at":1781469296}
 ```
 
 - If a SaySense window exists, it tries to activate/raise it with `xdotool`.
@@ -211,7 +211,8 @@ App-side implementation:
 - `poll_command_file()` runs every 150 ms via `root.after`.
 - Commands older than 15 seconds are ignored to prevent stale auto-recording on
   a later app launch.
-- On `{"action": "start_hotkey_recording"}`:
+- On `{"action": "start_hotkey_recording"}` or
+  `{"action": "toggle_quick_dictation"}`:
   - `deiconify()`, `lift()`, `focus_force()`
   - if already recording, call `stop_recording()`
   - if model is still loading, mark pending start
@@ -224,9 +225,12 @@ Final UX:
 1. Press `Ctrl+Shift+D`.
 2. SaySense opens/raises and immediately starts recording.
 3. User speaks normally.
-4. Silence timeout stops recording.
+4. Silence timeout stops recording, or pressing `Ctrl+Shift+D` again forces
+   stop/transcribe.
 5. App transcribes, copies to clipboard, then minimizes.
-6. Pressing `Ctrl+Shift+D` while recording acts as a forced stop.
+6. On Windows, the same `Ctrl+Shift+D` toggle is registered globally with
+   `pynput` while the app is running. If endpoint policy blocks global hooks,
+   the focused-window shortcut still works.
 
 Why this route was chosen:
 

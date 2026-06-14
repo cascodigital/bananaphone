@@ -3,5 +3,6 @@ SpeechRecognition>=3.16.1
 numpy>=2.0.0
 PyAudio>=0.2.13
 customtkinter>=5.2.2
+pynput>=1.8.1
 # audioop was removed from the Python stdlib in 3.13; this back-fills it.
 audioop-lts; python_version >= "3.13"

@@ -23,8 +23,13 @@ import numpy as np
 import speech_recognition as sr
 from faster_whisper import WhisperModel
 
+try:
+    from pynput import keyboard as pynput_keyboard
+except Exception:
+    pynput_keyboard = None
+
 APP_NAME = "SaySense"
-APP_VERSION = "1.3 Beta"
+APP_VERSION = "1.4 Beta"
 APP_TITLE = f"{APP_NAME} {APP_VERSION}"
 CPU_THREADS = min(os.cpu_count() or 4, 8)
 LOG_DIR = os.path.expanduser("~/.local/state/bananafone")
@@ -284,6 +289,8 @@ class DictationApp:
         self.transcription_thread = None
         self.last_command_id = None
         self.pending_hotkey_recording = False
+        self.global_hotkey_listener = None
+        self.last_quick_hotkey_at = 0.0
         self.refreshing_models = False
         self.refresh_button = None
         self.energy_floor = 0
@@ -299,6 +306,7 @@ class DictationApp:
 
         self.build_ui()
         self.setup_bindings()
+        self.start_global_hotkey_listener()
         self.refresh_cache_status()
         self.set_input_language(self.input_language, update_status=False)
         self.set_output_target(self.output_target, update_status=False)
@@ -378,7 +386,7 @@ class DictationApp:
 
         self.route_label = ctk.CTkLabel(
             container,
-            text="Click to talk. Auto-stops after silence. Ctrl+Shift+D starts quick dictation.",
+            text="Click to talk. Auto-stops after silence. Ctrl+Shift+D toggles quick dictation.",
             font=ctk.CTkFont(size=11),
             text_color=COLOR_SUBTLE,
             wraplength=480,
@@ -676,14 +684,27 @@ class DictationApp:
         return textbox
 
     def setup_bindings(self):
-        self.root.bind_all("<KeyPress-Control_L>", self.on_ctrl_press)
-        self.root.bind_all("<KeyRelease-Control_L>", self.on_ctrl_release)
-        self.root.bind_all("<KeyPress-Control_R>", self.on_ctrl_press)
-        self.root.bind_all("<KeyRelease-Control_R>", self.on_ctrl_release)
-        self.root.bind_all("<KeyPress-Shift_L>", self.on_shift_press)
-        self.root.bind_all("<KeyRelease-Shift_L>", self.on_shift_release)
-        self.root.bind_all("<KeyPress-Shift_R>", self.on_shift_press)
-        self.root.bind_all("<KeyRelease-Shift_R>", self.on_shift_release)
+        self.root.bind_all("<Control-Shift-d>", self.on_quick_hotkey)
+        self.root.bind_all("<Control-Shift-D>", self.on_quick_hotkey)
+
+    def start_global_hotkey_listener(self):
+        if pynput_keyboard is None:
+            return
+
+        try:
+            hotkey = pynput_keyboard.HotKey(
+                pynput_keyboard.HotKey.parse("<ctrl>+<shift>+d"),
+                lambda: self.root.after(0, self.start_hotkey_recording_command),
+            )
+            listener = pynput_keyboard.Listener(
+                on_press=lambda key: hotkey.press(listener.canonical(key)),
+                on_release=lambda key: hotkey.release(listener.canonical(key)),
+            )
+            listener.daemon = True
+            listener.start()
+            self.global_hotkey_listener = listener
+        except Exception as exc:
+            self.log_exception(f"global hotkey disabled: {exc}")
 
     def update_status(self, text, color=COLOR_TITLE):
         self.status_label.configure(text=text, text_color=color)
@@ -1017,7 +1038,7 @@ class DictationApp:
         if self.mode.get("backend") == "api":
             provider_label = SPEECH_PROVIDER_LABELS.get(self.api_speech_provider(), "OpenAI")
             mode_status = f"{provider_label} cloud transcription for higher precision."
-        return f"{mode_status} | Input: {input_name} | Output: {output_name}{mode_label} | Silence: {timeout}{text_ai} | Quick: Ctrl+Shift+D"
+        return f"{mode_status} | Input: {input_name} | Output: {output_name}{mode_label} | Silence: {timeout}{text_ai} | Quick toggle: Ctrl+Shift+D"
 
     def source_language(self):
         return self.input_language
@@ -2037,6 +2058,10 @@ class DictationApp:
         else:
             self.start_recording()
 
+    def on_quick_hotkey(self, _event=None):
+        self.start_hotkey_recording_command()
+        return "break"
+
     def on_ctrl_press(self, _event):
         self.ctrl_pressed = True
         self.maybe_start_hotkey_recording()
@@ -2082,10 +2107,15 @@ class DictationApp:
             self.root.after(150, self.poll_command_file)
 
     def handle_external_command(self, command):
-        if command.get("action") == "start_hotkey_recording":
+        if command.get("action") in ("start_hotkey_recording", "toggle_quick_dictation"):
             self.start_hotkey_recording_command()
 
     def start_hotkey_recording_command(self):
+        now = time.monotonic()
+        if now - self.last_quick_hotkey_at < 0.35:
+            return
+        self.last_quick_hotkey_at = now
+
         try:
             self.root.deiconify()
             self.root.lift()
