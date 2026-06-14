@@ -45,8 +45,43 @@ implemented.
   settings, and Jira Extra Instructions.
 - Hidden advanced Jira full-prompt override exists for power users.
 
+## Local Install / Runtime
+
+On Linux, install or refresh from source with:
+
+```bash
+cd /home/aristofeles/ai/projects/bananaphone_v2
+./install.sh
+```
+
+Current launcher:
+
+- `~/.local/share/applications/saysense.desktop`
+- Exec: `/home/aristofeles/ai/projects/bananaphone_v2/.venv/bin/python /home/aristofeles/ai/projects/bananaphone_v2/bananaphone_v2.py`
+
+Do not launch the GUI during automated verification unless the user explicitly
+asks; use `py_compile`, static imports, and package/release checks first.
+
+## Last UI Notes
+
+- The Jira action row should contain only Generate, Clear, regeneration style,
+  and Regenerate.
+- Customer/Internal copy buttons live inside their own tabs to avoid horizontal
+  overflow on the 560 px window.
+- History stores the last 10 generated tickets locally and offers latest-output
+  reopen/copy actions.
+
 ## Pending Branding Debt
 
 - Icon assets still use the old banana-themed filenames and artwork.
 - Config/log/env names still use `bananafone` for compatibility.
 - Existing screenshots may need a visual refresh after the SaySense rename.
+
+## Recommended Next Work
+
+- Replace old banana-themed icon/screenshot assets with SaySense visuals.
+- Add Jira documentation profiles instead of making users edit prompts first.
+- Add Settings tabs or a scrollable Settings layout.
+- Add call-note timestamps in Jira Mode.
+- Add global hotkeys for push-to-talk and Jira actions.
+- Add in-app update check and improve Windows signing/trust.
