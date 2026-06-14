@@ -1,4 +1,4 @@
-# BananaPhone v2 on Windows
+# SaySense on Windows
 
 Same engine as Linux: PyAudio capture, local `faster-whisper` transcription or
 cloud `API` mode via OpenAI, plus `JIRA MODE`. The UI is CustomTkinter (dark,
@@ -10,7 +10,7 @@ Needs Python 3.10+ installed first (python.org, tick "Add python.exe to PATH").
 
 Then pick one:
 
-- **Easiest:** double-click **`Install-BananaPhone.bat`**. Done.
+- **Easiest:** double-click **`Install-SaySense.bat`**. Done.
   (A `.ps1` cannot be run by double-click and is blocked by the execution
   policy — the `.bat` handles both for you. It only bypasses the policy for
   that one run; it does not change any system setting.)
@@ -22,7 +22,7 @@ Then pick one:
   .\install_windows.ps1
   ```
 
-All three create the venv, install dependencies, and put a **BananaPhone**
+All three create the venv, install dependencies, and put a **SaySense**
 shortcut on your Desktop and Start Menu. Double-click the shortcut to run.
 Set the OpenAI key later inside the app's **Settings** (or use `-PromptForKey`,
 see below).
@@ -52,8 +52,8 @@ Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 The installer creates:
 
 - `.venv` with all dependencies (including `customtkinter`)
-- a **Desktop** shortcut `BananaPhone.lnk`
-- a **Start Menu** shortcut under `BananaPhone`
+- a **Desktop** shortcut `SaySense.lnk`
+- a **Start Menu** shortcut under `SaySense`
 - shortcuts target `pythonw.exe` so there is **no black console window**
 
 Then just double-click the Desktop shortcut.
@@ -121,8 +121,8 @@ Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 
 Output:
 
-- one-folder: `dist\BananaPhone\BananaPhone.exe` — zip the whole `BananaPhone` folder to share it
-- one-file (`.\build_windows_exe.ps1 -OneFile`): `dist\BananaPhone.exe` — a single file, slower first launch
+- one-folder: `dist\SaySense\SaySense.exe` — zip the whole `SaySense` folder to share it
+- one-file (`.\build_windows_exe.ps1 -OneFile`): `dist\SaySense.exe` — a single file, slower first launch
 
 The build bundles `customtkinter`, `faster-whisper`, `ctranslate2` and `av`.
 Local Whisper models (`small` / `medium`) are still downloaded on first use into

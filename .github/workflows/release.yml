@@ -28,7 +28,7 @@ jobs:
       - name: Build standalone app (PyInstaller)
         run: >
           pyinstaller --noconfirm --clean --windowed --onedir
-          --name BananaPhone
+          --name SaySense
           --icon assets/bananaphone.ico
           --collect-all customtkinter
           --collect-all faster_whisper
@@ -50,7 +50,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           prerelease: ${{ contains(github.ref_name, 'beta') }}
-          files: packaging/Output/BananaPhone-Setup-*.exe
+          files: packaging/Output/SaySense-Setup-*.exe
 
   linux-appimage:
     runs-on: ubuntu-22.04
@@ -74,7 +74,7 @@ jobs:
       - name: Build standalone app (PyInstaller)
         run: >
           pyinstaller --noconfirm --clean --windowed --onedir
-          --name BananaPhone
+          --name SaySense
           --collect-all customtkinter
           --collect-all faster_whisper
           --collect-all ctranslate2
@@ -85,13 +85,13 @@ jobs:
       - name: Assemble AppDir
         run: |
           mkdir -p AppDir/usr/bin
-          cp -r dist/BananaPhone/* AppDir/usr/bin/
-          cp packaging/bananaphone.desktop AppDir/
-          cp assets/bananaphone-256.png AppDir/bananaphone.png
+          cp -r dist/SaySense/* AppDir/usr/bin/
+          cp packaging/saysense.desktop AppDir/
+          cp assets/bananaphone-256.png AppDir/saysense.png
           cat > AppDir/AppRun <<'EOF'
           #!/bin/sh
           HERE="$(dirname "$(readlink -f "$0")")"
-          exec "$HERE/usr/bin/BananaPhone" "$@"
+          exec "$HERE/usr/bin/SaySense" "$@"
           EOF
           chmod +x AppDir/AppRun
 
@@ -100,10 +100,10 @@ jobs:
           version="${GITHUB_REF_NAME#v}"
           wget -q https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage
           chmod +x appimagetool-x86_64.AppImage
-          ARCH=x86_64 ./appimagetool-x86_64.AppImage AppDir "BananaPhone-${version}-x86_64.AppImage"
+          ARCH=x86_64 ./appimagetool-x86_64.AppImage AppDir "SaySense-${version}-x86_64.AppImage"
 
       - name: Upload to release
         uses: softprops/action-gh-release@v2
         with:
           prerelease: ${{ contains(github.ref_name, 'beta') }}
-          files: BananaPhone-*-x86_64.AppImage
+          files: SaySense-*-x86_64.AppImage

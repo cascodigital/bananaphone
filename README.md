@@ -1,17 +1,17 @@
-# 🍌 BananaPhone — Push-to-Talk Dictation & Jira Notes
+# SaySense — Push-to-Talk Dictation & Jira Notes
 
-![Status](https://img.shields.io/badge/Status-1.0-green)
+![Status](https://img.shields.io/badge/Status-1.0%20Beta-yellow)
 ![License](https://img.shields.io/badge/License-MIT-blue)
 ![Python](https://img.shields.io/badge/Python-3.10+-3776AB?style=flat-square&logo=python&logoColor=white)
 ![OpenAI](https://img.shields.io/badge/OpenAI-STT%20%2B%20Text-412991?style=flat-square&logo=openai&logoColor=white)
 ![Gemini](https://img.shields.io/badge/Gemini-STT%20%2B%20Text-8E75B2?style=flat-square&logo=googlegemini&logoColor=white)
 ![Ollama](https://img.shields.io/badge/Ollama-Offline%20Text-000000?style=flat-square&logo=ollama&logoColor=white)
 
-Desktop push-to-talk dictation app for IT support work across languages. Speak in Portuguese, Spanish or English — get clean, professional text in the language you choose, already on your clipboard. **Jira Mode** turns dictated case notes into ticket-ready documentation: a customer-facing reply and an internal note, generated in one click.
+Desktop push-to-talk dictation app for IT support work across languages. Speak in Portuguese, Spanish or English and get clean, professional text in the language you choose, already on your clipboard. **Jira Mode** turns dictated case notes into ticket-ready documentation: a customer-facing reply and an internal note, generated in one click.
 
 ## Why
 
-Working support tickets in a second language means constantly juggling a translator, a text editor, and the ticket system. BananaPhone collapses that loop: hold a button, talk in your language, paste polished English (or PT/ES) wherever the cursor is. For Jira, it goes further — dictate raw notes during the call and generate both the public comment and the internal worklog when you're done.
+Working support tickets in a second language means constantly juggling a translator, a text editor, and the ticket system. SaySense collapses that loop: hold a button, talk in your language, paste polished English (or PT/ES) wherever the cursor is. For Jira, it goes further — dictate raw notes during the call and generate both the public comment and the internal worklog when you're done.
 
 ## Screenshots
 
@@ -58,10 +58,10 @@ Prebuilt packages are on the [Releases page](https://github.com/cascodigital/ban
 
 | Platform | File | Install |
 |----------|------|---------|
-| **Windows** | `BananaPhone-Setup-<version>.exe` | Run the wizard. Per-user install, no admin needed. Unsigned binary — accept the SmartScreen prompt |
-| **Linux** | `BananaPhone-<version>-x86_64.AppImage` | `chmod +x` and run. Works on any modern distro |
+| **Windows** | `SaySense-Setup-<version>.exe` | Run the wizard. Per-user install, no admin needed. Unsigned binary — accept the SmartScreen prompt |
+| **Linux** | `SaySense-<version>-x86_64.AppImage` | `chmod +x` and run. Works on any modern distro |
 
-> Version 1.0 is the first support-workflow release. If something breaks, [open an issue](https://github.com/cascodigital/bananaphone_v2/issues) with the log from `~/.config/bananafone/` (Linux) or `%USERPROFILE%\.config\bananafone\` (Windows).
+> Version 1.0 Beta is the first public-name support-workflow release. If something breaks, open an issue in the private repo with the log from `~/.config/bananafone/` (Linux) or `%USERPROFILE%\.config\bananafone\` (Windows).
 
 ## Run from source
 
@@ -77,7 +77,7 @@ cd bananaphone_v2
 
 ### Windows
 
-Double-click **`Install-BananaPhone.bat`**, or from PowerShell:
+Double-click **`Install-SaySense.bat`**, or from PowerShell:
 
 ```powershell
 .\install_windows.ps1               # installs Python via winget if missing
@@ -99,6 +99,21 @@ Everything lives in the in-app **Settings** panel:
 
 No key is required for the Ollama path; the app can install Ollama and pull the model for you from Settings.
 
+## Name And Compatibility
+
+The public product name is **SaySense**. The repository and some internal paths
+still use the old BananaPhone/Bananafone names for compatibility with existing
+settings, API keys, logs, and Jira history.
+
+Do not delete these paths during normal upgrades:
+
+- `~/.config/bananafone/settings_v2.json`
+- `~/.config/bananafone/jira_history.json`
+- `~/.local/state/bananafone/bananaphone_v2.log`
+
+The canonical handoff for future AI/code sessions is
+[`docs/AI_HANDOFF.md`](docs/AI_HANDOFF.md).
+
 ## Privacy
 
 - Cloud providers receive your audio (STT) and text (translation/Jira) — pick the provider you trust.
@@ -113,7 +128,7 @@ bananaphone_v2/
 ├── bananaphone_v2.py        # The whole app (CustomTkinter GUI + pipelines)
 ├── install.sh               # Linux from-source installer
 ├── install_windows.ps1      # Windows from-source installer (winget-aware)
-├── Install-BananaPhone.bat  # Windows one-click wrapper
+├── Install-SaySense.bat     # Windows one-click wrapper
 ├── build_windows_exe.ps1    # Local standalone .exe builder (PyInstaller)
 ├── FUTURE_RELEASES.md       # Planned post-1.0 work
 ├── packaging/               # Inno Setup script + AppImage desktop entry
@@ -121,7 +136,7 @@ bananaphone_v2/
 ├── assets/                  # App icon
 ├── desktop/                 # .desktop launchers
 ├── docs/screenshots/
-├── bananafone.py            # Legacy v1 (kept for reference)
+├── bananafone.py            # Legacy Bananafone v1 (kept for reference)
 └── README_V1.md             # Legacy v1 docs
 ```
 

@@ -1,8 +1,8 @@
 [Desktop Entry]
 Type=Application
-Name=BananaPhone
+Name=SaySense
 Comment=Push-to-talk dictation with language routing and Jira Mode
-Exec=BananaPhone
-Icon=bananaphone
+Exec=SaySense
+Icon=saysense
 Terminal=false
 Categories=Utility;Audio;

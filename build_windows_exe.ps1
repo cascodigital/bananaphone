@@ -1,4 +1,4 @@
-# BananaPhone v2 - Windows standalone .exe builder
+# SaySense - Windows standalone .exe builder
 # Produces a self-contained build with PyInstaller so the app can run on a
 # Windows machine that does NOT have Python installed.
 #
@@ -7,11 +7,11 @@
 #
 # Usage (PowerShell, from the project folder):
 #   .\build_windows_exe.ps1            # one-folder build (recommended, reliable)
-#   .\build_windows_exe.ps1 -OneFile   # single BananaPhone.exe (slower startup)
+#   .\build_windows_exe.ps1 -OneFile   # single SaySense.exe (slower startup)
 #
 # Output:
-#   dist\BananaPhone\BananaPhone.exe   (one-folder)  -> zip the whole folder
-#   dist\BananaPhone.exe               (one-file)
+#   dist\SaySense\SaySense.exe   (one-folder)  -> zip the whole folder
+#   dist\SaySense.exe               (one-file)
 #
 # If PowerShell blocks the script, run once:
 #   Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
@@ -44,7 +44,7 @@ $CommonArgs = @(
     "--noconfirm",
     "--clean",
     "--windowed",
-    "--name", "BananaPhone",
+    "--name", "SaySense",
     "--collect-all", "customtkinter",
     "--collect-all", "faster_whisper",
     "--collect-all", "ctranslate2",
@@ -65,13 +65,13 @@ Write-Host "Building standalone executable (this takes a few minutes)..."
 Write-Host ""
 Write-Host "Build complete." -ForegroundColor Green
 if ($OneFile) {
-    Write-Host "Executable: $ProjectDir\dist\BananaPhone.exe"
+    Write-Host "Executable: $ProjectDir\dist\SaySense.exe"
     Write-Host "Hand over that single file. First launch is slower (it self-extracts)."
 }
 else {
-    Write-Host "Build folder: $ProjectDir\dist\BananaPhone\"
-    Write-Host "Executable  : $ProjectDir\dist\BananaPhone\BananaPhone.exe"
-    Write-Host "To distribute: zip the entire 'BananaPhone' folder and share it."
+    Write-Host "Build folder: $ProjectDir\dist\SaySense\"
+    Write-Host "Executable  : $ProjectDir\dist\SaySense\SaySense.exe"
+    Write-Host "To distribute: zip the entire 'SaySense' folder and share it."
 }
 Write-Host ""
 Write-Host "Note: the local 'small'/'medium' Whisper models are downloaded on first"
