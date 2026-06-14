@@ -1,5 +1,11 @@
 # Future Releases
 
+## Branding Polish
+- Replace old banana-themed icon assets with SaySense-specific artwork.
+- Refresh README screenshots after the SaySense rename.
+- Consider a later compatibility migration from `bananafone` config/log names to
+  `saysense`, but only with automatic import of existing settings and history.
+
 ## Profiles and Templates
 - Add selectable Jira documentation profiles:
   - Default IT Support

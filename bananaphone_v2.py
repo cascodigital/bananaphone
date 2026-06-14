@@ -490,30 +490,6 @@ class DictationApp:
         )
         self.regenerate_button.pack(side=tk.LEFT, padx=(0, 6))
 
-        self.copy_internal_button = ctk.CTkButton(
-            self.jira_actions_frame,
-            text="Copy Internal",
-            font=ctk.CTkFont(size=12, weight="bold"),
-            height=32,
-            corner_radius=10,
-            fg_color=BTN_NEUTRAL,
-            hover_color=BTN_NEUTRAL_HOVER,
-            command=self.copy_internal_note,
-        )
-        self.copy_internal_button.pack(side=tk.RIGHT)
-
-        self.copy_customer_button = ctk.CTkButton(
-            self.jira_actions_frame,
-            text="Copy Customer",
-            font=ctk.CTkFont(size=12, weight="bold"),
-            height=32,
-            corner_radius=10,
-            fg_color=BTN_NEUTRAL,
-            hover_color=BTN_NEUTRAL_HOVER,
-            command=self.copy_customer_comment,
-        )
-        self.copy_customer_button.pack(side=tk.RIGHT, padx=(0, 6))
-
         self.jira_tabs = ctk.CTkTabview(
             self.jira_frame,
             fg_color=COLOR_CARD,
@@ -531,7 +507,35 @@ class DictationApp:
         self.history_tab = self.jira_tabs.add("History")
 
         self.raw_notes_text = self._build_panel_textbox(self.raw_notes_tab)
+
+        self.customer_actions_frame = ctk.CTkFrame(self.customer_tab, fg_color="transparent")
+        self.customer_actions_frame.pack(fill=tk.X, padx=4, pady=(4, 0))
+        self.copy_customer_button = ctk.CTkButton(
+            self.customer_actions_frame,
+            text="Copy Customer Comment",
+            font=ctk.CTkFont(size=11, weight="bold"),
+            height=28,
+            corner_radius=8,
+            fg_color=BTN_NEUTRAL,
+            hover_color=BTN_NEUTRAL_HOVER,
+            command=self.copy_customer_comment,
+        )
+        self.copy_customer_button.pack(side=tk.RIGHT)
         self.customer_text = self._build_panel_textbox(self.customer_tab)
+
+        self.internal_actions_frame = ctk.CTkFrame(self.internal_tab, fg_color="transparent")
+        self.internal_actions_frame.pack(fill=tk.X, padx=4, pady=(4, 0))
+        self.copy_internal_button = ctk.CTkButton(
+            self.internal_actions_frame,
+            text="Copy Internal Note",
+            font=ctk.CTkFont(size=11, weight="bold"),
+            height=28,
+            corner_radius=8,
+            fg_color=BTN_NEUTRAL,
+            hover_color=BTN_NEUTRAL_HOVER,
+            command=self.copy_internal_note,
+        )
+        self.copy_internal_button.pack(side=tk.RIGHT)
         self.internal_text = self._build_panel_textbox(self.internal_tab)
         self.history_text = self._build_panel_textbox(self.history_tab)
 
