@@ -3,7 +3,7 @@
 ## Current Product Identity
 
 - Public product name: **SaySense**
-- Version line: **1.0 Beta**
+- Version line: **1.2 Beta**
 - Tagline: **You speak. It makes sense.**
 - Internal repository / historical codename: `bananaphone_v2`
 - Legacy app kept for reference: `bananafone.py` / `README_V1.md`
@@ -29,11 +29,12 @@ implemented.
 
 ## Release Rules
 
-- `v1.0-beta` and other tags containing `beta` publish prereleases.
+- Tags containing `beta`, such as `v1.2-beta`, publish prereleases.
 - GitHub Actions builds:
   - Windows: `SaySense-Setup-<version>.exe`
   - Linux: `SaySense-<version>-x86_64.AppImage`
-- The repository must remain private: `cascodigital/bananaphone_v2`.
+- The active SaySense repository is `cascodigital/saysense`.
+- The historical BananaPhone v2 repository is `cascodigital/bananaphone_v2`.
 
 ## Current Workflow
 
@@ -85,3 +86,92 @@ asks; use `py_compile`, static imports, and package/release checks first.
 - Add call-note timestamps in Jira Mode.
 - Add global hotkeys for push-to-talk and Jira actions.
 - Add in-app update check and improve Windows signing/trust.
+
+## Local Linux Quick Dictation Hotkey - 2026-06-14
+
+Goal: make SaySense usable without permanently occupying screen space on the
+Linux desktop.
+
+Current desktop environment observed:
+
+- Desktop: Zorin/GNOME
+- Session type: Wayland
+- `xdotool` is installed and can see the Tk/XWayland SaySense window.
+- GNOME custom shortcut slot used: `custom3`
+
+Shortcut installed by `install.sh` when `gsettings` is available:
+
+```text
+Name: Toggle SaySense
+Command: /home/aristofeles/.local/bin/saysense-toggle
+Binding: <Shift><Control>d
+```
+
+Before this change, `custom3` was:
+
+```text
+Name: dictate
+Command: /home/aristofeles/ditado_gui.py
+Binding: <Shift><Control>d
+```
+
+Local wrapper installed by `install.sh`:
+
+```text
+/home/aristofeles/.local/bin/saysense-toggle
+```
+
+Wrapper behavior:
+
+- Defines the source checkout as `/home/aristofeles/ai/projects/bananaphone_v2`.
+- Defines the app entrypoint as `bananaphone_v2.py` inside that checkout.
+- Writes a command request atomically to:
+
+```text
+/home/aristofeles/.config/bananafone/command.json
+```
+
+- Command payload format:
+
+```json
+{"id":"<uuid-or-timestamp>","action":"start_hotkey_recording","created_at":1781469296}
+```
+
+- If a SaySense window exists, it tries to activate/raise it with `xdotool`.
+- If no window exists, it launches:
+
+```bash
+/home/aristofeles/ai/projects/bananaphone_v2/.venv/bin/python /home/aristofeles/ai/projects/bananaphone_v2/bananaphone_v2.py
+```
+
+App-side implementation:
+
+- `COMMAND_FILE = os.path.join(CONFIG_DIR, "command.json")`.
+- `poll_command_file()` runs every 150 ms via `root.after`.
+- Commands older than 15 seconds are ignored to prevent stale auto-recording on
+  a later app launch.
+- On `{"action": "start_hotkey_recording"}`:
+  - `deiconify()`, `lift()`, `focus_force()`
+  - if already recording, call `stop_recording()`
+  - if model is still loading, mark pending start
+  - otherwise call `start_recording(from_hotkey=True)`
+- `start_recording(from_hotkey=True)` marks the recording so the app minimizes
+  itself after no-audio, transcription success, or transcription error.
+
+Final UX:
+
+1. Press `Ctrl+Shift+D`.
+2. SaySense opens/raises and immediately starts recording.
+3. User speaks normally.
+4. Silence timeout stops recording.
+5. App transcribes, copies to clipboard, then minimizes.
+6. Pressing `Ctrl+Shift+D` while recording acts as a forced stop.
+
+Why this route was chosen:
+
+- Pure global hold-to-talk with `Ctrl+Shift` under GNOME/Wayland is unreliable
+  without a dedicated background daemon or compositor-specific integration.
+- A GNOME shortcut invoking a small wrapper is much simpler and matches the
+  current local install.
+- Polling a local command file avoids needing DBus or socket plumbing for this
+  private desktop workflow.
