@@ -46,12 +46,34 @@ jobs:
           $version = "${{ github.ref_name }}".TrimStart("v")
           & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" /DMyAppVersion=$version packaging\installer.iss
           Compress-Archive -Path dist\SaySense\* -DestinationPath "SaySense-Portable-$version.zip" -Force
+          pyinstaller --noconfirm --clean --console --onedir `
+            --name SaySense-Debug `
+            --icon assets/bananaphone.ico `
+            --collect-all customtkinter `
+            --collect-all faster_whisper `
+            --collect-all ctranslate2 `
+            --collect-all av `
+            --hidden-import tokenizers `
+            bananaphone_v2.py
+          Compress-Archive -Path dist\SaySense-Debug\* -DestinationPath "SaySense-Debug-Console-$version.zip" -Force
+          $sourceRoot = "SaySense-Source-$version"
+          New-Item -ItemType Directory -Force -Path $sourceRoot | Out-Null
+          Copy-Item bananaphone_v2.py,requirements.txt,install_windows.ps1,Install-SaySense.bat,README_WINDOWS.md,LICENSE -Destination $sourceRoot
+          Copy-Item assets -Destination $sourceRoot -Recurse
+          Copy-Item docs -Destination $sourceRoot -Recurse
+          Compress-Archive -Path "$sourceRoot\*" -DestinationPath "SaySense-Source-$version.zip" -Force
           Get-FileHash "packaging\Output\SaySense-Setup-$version.exe" -Algorithm SHA256 |
             ForEach-Object { "$($_.Hash.ToLower())  SaySense-Setup-$version.exe" } |
             Set-Content "SaySense-Setup-$version.exe.sha256"
           Get-FileHash "SaySense-Portable-$version.zip" -Algorithm SHA256 |
             ForEach-Object { "$($_.Hash.ToLower())  SaySense-Portable-$version.zip" } |
             Set-Content "SaySense-Portable-$version.zip.sha256"
+          Get-FileHash "SaySense-Debug-Console-$version.zip" -Algorithm SHA256 |
+            ForEach-Object { "$($_.Hash.ToLower())  SaySense-Debug-Console-$version.zip" } |
+            Set-Content "SaySense-Debug-Console-$version.zip.sha256"
+          Get-FileHash "SaySense-Source-$version.zip" -Algorithm SHA256 |
+            ForEach-Object { "$($_.Hash.ToLower())  SaySense-Source-$version.zip" } |
+            Set-Content "SaySense-Source-$version.zip.sha256"
 
       - name: Upload to release
         uses: softprops/action-gh-release@v2
@@ -60,6 +82,8 @@ jobs:
           files: |
             packaging/Output/SaySense-Setup-*.exe
             SaySense-Portable-*.zip
+            SaySense-Debug-Console-*.zip
+            SaySense-Source-*.zip
             SaySense-*.sha256
 
   linux-appimage:
