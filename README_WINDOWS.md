@@ -17,7 +17,7 @@ Then pick one:
 - **Right-click:** right-click `install_windows.ps1` → *Run with PowerShell*.
 - **Manual (PowerShell):**
   ```powershell
-  cd path\to\bananaphone_v2
+  cd path\to\saysense
   Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
   .\install_windows.ps1
   ```
@@ -44,7 +44,7 @@ Requires Python 3.10+ from [python.org](https://www.python.org/downloads/) with
 In PowerShell:
 
 ```powershell
-cd path\to\bananaphone_v2
+cd path\to\saysense
 Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 .\install_windows.ps1
 ```
@@ -91,13 +91,13 @@ File format:
 ### Run without the shortcut
 
 ```powershell
-.\.venv\Scripts\pythonw.exe .\bananaphone_v2.py
+.\.venv\Scripts\pythonw.exe .\saysense.py
 ```
 
 ### Update
 
 ```powershell
-cd path\to\bananaphone_v2
+cd path\to\saysense
 git pull
 .\install_windows.ps1
 ```
@@ -113,7 +113,7 @@ The build must run **on Windows** (a Windows `.exe` cannot be cross-compiled
 from Linux).
 
 ```powershell
-cd path\to\bananaphone_v2
+cd path\to\saysense
 Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 .\install_windows.ps1          # if you have not set up the venv yet
 .\build_windows_exe.ps1        # one-folder build (recommended)
@@ -134,7 +134,7 @@ download.
 ## Settings and logs (Windows paths)
 
 - settings: `%USERPROFILE%\.config\bananafone\settings_v2.json`
-- log: `%USERPROFILE%\.local\state\bananafone\bananaphone_v2.log`
+- log: `%USERPROFILE%\.local\state\bananafone\saysense.log`
 
 ## Notes
 
@@ -161,7 +161,7 @@ download.
 - If company policy blocks bundled executables, use the source zip from
   `v1.3-beta` or later. Extract it, run `Install-SaySense.bat`, then start the
   app through the generated shortcut, `Run-SaySense.bat`, or with
-  `.venv\Scripts\pythonw.exe bananaphone_v2.py`.
+  `.venv\Scripts\pythonw.exe saysense.py`.
 - If `PyAudio` fails to install, update Python/pip first. On modern Windows with
   Python 3.10+ it normally installs from a wheel.
 - For personal use you may keep an `install_windows_private.ps1` with an embedded

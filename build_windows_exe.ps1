@@ -25,7 +25,7 @@ $ErrorActionPreference = "Stop"
 $ProjectDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $VenvDir = Join-Path $ProjectDir ".venv"
 $Python = Join-Path $VenvDir "Scripts\python.exe"
-$AppScript = Join-Path $ProjectDir "bananaphone_v2.py"
+$AppScript = Join-Path $ProjectDir "saysense.py"
 
 Set-Location $ProjectDir
 

@@ -5,7 +5,7 @@
 - Public product name: **SaySense**
 - Version line: **1.4 Beta**
 - Tagline: **You speak. It makes sense.**
-- Internal repository / historical codename: `bananaphone_v2`
+- Internal repository / historical codename: `saysense`
 - Legacy app kept for reference: `bananafone.py` / `README_V1.md`
 
 The public-facing app name is SaySense. Do not rebrand releases, screenshots,
@@ -17,10 +17,10 @@ explicitly asks for that rollback.
 Keep these internal paths and environment variables for backward compatibility:
 
 - Linux settings: `~/.config/bananafone/settings_v2.json`
-- Linux logs: `~/.local/state/bananafone/bananaphone_v2.log`
+- Linux logs: `~/.local/state/bananafone/saysense.log`
 - Jira history: `~/.config/bananafone/jira_history.json`
 - Environment variable prefix: `BANANAFONE_*`
-- Main source file: `bananaphone_v2.py`
+- Main source file: `saysense.py`
 
 These names are technical debt, but changing them now would lose existing keys,
 history, defaults, and support notes. Public branding is SaySense; internal
@@ -38,7 +38,7 @@ implemented.
   - Optional diagnostic/portable artifacts: `SaySense-Portable-<version>.zip`
     and `SaySense-Debug-Console-<version>.zip`
 - The active SaySense repository is `cascodigital/saysense`.
-- The historical BananaPhone v2 repository is `cascodigital/bananaphone_v2`.
+- The historical BananaPhone v2 repository is `cascodigital/saysense`.
 
 ## Current Workflow
 
@@ -55,14 +55,14 @@ implemented.
 On Linux, install or refresh from source with:
 
 ```bash
-cd /home/aristofeles/ai/projects/bananaphone_v2
+cd /home/aristofeles/ai/projects/saysense
 ./install.sh
 ```
 
 Current launcher:
 
 - `~/.local/share/applications/saysense.desktop`
-- Exec: `/home/aristofeles/ai/projects/bananaphone_v2/.venv/bin/python /home/aristofeles/ai/projects/bananaphone_v2/bananaphone_v2.py`
+- Exec: `/home/aristofeles/ai/projects/saysense/.venv/bin/python /home/aristofeles/ai/projects/saysense/saysense.py`
 
 Do not launch the GUI during automated verification unless the user explicitly
 asks; use `py_compile`, static imports, and package/release checks first.
@@ -137,7 +137,7 @@ For `v1.4-beta` and later, the Windows release workflow also uploads:
   `SaySense-Debug.exe` from PowerShell to see traceback/runtime errors.
 - `SaySense-Source-<version>.zip`: source + Windows installer scripts. Extract,
   run `Install-SaySense.bat`, then launch via the generated shortcut,
-  `Run-SaySense.bat`, or `.venv\Scripts\pythonw.exe bananaphone_v2.py`.
+  `Run-SaySense.bat`, or `.venv\Scripts\pythonw.exe saysense.py`.
 
 Portable PyInstaller structure reminder:
 
@@ -184,8 +184,8 @@ Local wrapper installed by `install.sh`:
 
 Wrapper behavior:
 
-- Defines the source checkout as `/home/aristofeles/ai/projects/bananaphone_v2`.
-- Defines the app entrypoint as `bananaphone_v2.py` inside that checkout.
+- Defines the source checkout as `/home/aristofeles/ai/projects/saysense`.
+- Defines the app entrypoint as `saysense.py` inside that checkout.
 - Writes a command request atomically to:
 
 ```text
@@ -202,7 +202,7 @@ Wrapper behavior:
 - If no window exists, it launches:
 
 ```bash
-/home/aristofeles/ai/projects/bananaphone_v2/.venv/bin/python /home/aristofeles/ai/projects/bananaphone_v2/bananaphone_v2.py
+/home/aristofeles/ai/projects/saysense/.venv/bin/python /home/aristofeles/ai/projects/saysense/saysense.py
 ```
 
 App-side implementation:

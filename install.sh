@@ -119,7 +119,7 @@ cat > "$DESKTOP_FILE" <<EOF
 Version=2.1
 Name=SaySense
 Comment=Dictation and Jira documentation (local + API)
-Exec=$VENV_DIR/bin/python $REPO_DIR/bananaphone_v2.py
+Exec=$VENV_DIR/bin/python $REPO_DIR/saysense.py
 Icon=audio-input-microphone
 Terminal=false
 Type=Application
@@ -135,7 +135,7 @@ set -euo pipefail
 
 APP_DIR="$REPO_DIR"
 PYTHON="$VENV_DIR/bin/python"
-APP="\$APP_DIR/bananaphone_v2.py"
+APP="\$APP_DIR/saysense.py"
 CONFIG_DIR="\$HOME/.config/bananafone"
 COMMAND_FILE="\$CONFIG_DIR/command.json"
 
@@ -258,7 +258,7 @@ install_gnome_hotkey || log "GNOME hotkey setup skipped/failed; run $TOGGLE_SCRI
 echo
 ok "SaySense installed."
 echo "  Launcher : $DESKTOP_FILE"
-echo "  Run      : $VENV_DIR/bin/python $REPO_DIR/bananaphone_v2.py"
+echo "  Run      : $VENV_DIR/bin/python $REPO_DIR/saysense.py"
 echo "  Hotkey   : Ctrl+Shift+D -> $TOGGLE_SCRIPT"
 if [[ "$WITH_OLLAMA" -ne 1 ]]; then
   echo "  Local LLM: not installed. Re-run with --with-ollama, or install from Settings."
