@@ -9,7 +9,7 @@
 
 Current SaySense repository: [cascodigital/saysense](https://github.com/cascodigital/saysense)
 
-Project lineage: BananaPhone v1 ([cascodigital/bananafone](https://github.com/cascodigital/bananafone)) → BananaPhone v2 ([cascodigital/bananaphone_v2](https://github.com/cascodigital/bananaphone_v2)) → **SaySense**.
+Project lineage: BananaPhone v1 ([cascodigital/bananafone](https://github.com/cascodigital/bananafone)) → BananaPhone v2 ([cascodigital/saysense](https://github.com/cascodigital/saysense)) → **SaySense**.
 
 ---
 
@@ -66,7 +66,7 @@ git clone https://github.com/cascodigital/saysense.git
 cd saysense
 ./install.sh                # app + all dependencies (apt/dnf/pacman auto-detected)
 ./install.sh --with-ollama  # also install Ollama for offline text/Jira
-./.venv/bin/python bananaphone_v2.py
+./.venv/bin/python saysense.py
 ```
 
 ### Windows
@@ -99,7 +99,7 @@ No key is required for the Ollama path; the app can install Ollama and pull the 
 
 ```
 saysense/
-├── bananaphone_v2.py        # The whole app (CustomTkinter GUI + pipelines)
+├── saysense.py        # The whole app (CustomTkinter GUI + pipelines)
 ├── install.sh               # Linux from-source installer
 ├── install_windows.ps1      # Windows from-source installer (winget-aware)
 ├── Install-SaySense.bat     # Windows one-click wrapper

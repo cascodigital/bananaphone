@@ -2,7 +2,7 @@
 Type=Application
 Name=SaySense
 Comment=Experimental dictation console with separate input and output language selectors
-Exec=python3 /path/to/bananaphone_v2.py
+Exec=python3 /path/to/saysense.py
 Icon=audio-input-microphone
 Terminal=false
 Categories=Utility;Audio;

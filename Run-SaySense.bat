@@ -9,4 +9,4 @@ if not exist ".venv\Scripts\pythonw.exe" (
     exit /b 1
 )
 
-start "" ".venv\Scripts\pythonw.exe" "%~dp0bananaphone_v2.py"
+start "" ".venv\Scripts\pythonw.exe" "%~dp0saysense.py"
