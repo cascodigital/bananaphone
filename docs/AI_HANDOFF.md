@@ -3,7 +3,7 @@
 ## Current Product Identity
 
 - Public product name: **SaySense**
-- Version line: **1.5 Beta**
+- Version line: **1.5.1 Beta**
 - Tagline: **You speak. It makes sense.**
 - Internal repository / historical codename: `saysense`
 - Legacy app kept for reference: `bananafone.py` / `README_V1.md`
@@ -29,7 +29,7 @@ implemented.
 
 ## Release Rules
 
-- Tags containing `beta`, such as `v1.4-beta`, publish prereleases.
+- Tags containing `beta`, such as `v1.5-beta.1`, publish prereleases.
 - GitHub Actions builds:
   - Windows installer: `SaySense-Setup-<version>.exe`
   - Windows source zip: `SaySense-Source-<version>.zip`

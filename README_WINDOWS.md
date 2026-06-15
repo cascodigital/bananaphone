@@ -126,8 +126,8 @@ Output:
 
 The build bundles `customtkinter`, `faster-whisper`, `ctranslate2` and `av`.
 Local Whisper models (`small` / `medium`) are still downloaded on first use into
-`%USERPROFILE%\.cache\huggingface`. `API` mode needs only an OpenAI key, no model
-download.
+`%USERPROFILE%\.cache\huggingface`. `API` mode uses the configured cloud speech
+provider, so it needs an OpenAI or Gemini key but no local model download.
 
 ---
 
@@ -143,7 +143,7 @@ download.
   press once to start, press again to stop/transcribe. If global hooking is
   blocked by Windows policy, the same shortcut still works while the window is
   focused.
-- `PT -> EN` / `EN -> PT` use OpenAI to convert the transcription before copying.
+- `PT -> EN` / `EN -> PT` use the configured text provider to convert the transcription before copying.
 - `PT -> PT` / `EN -> EN` copy the transcription directly.
 - If Windows shows `Windows cannot access the specified device, path, or file`
   immediately when opening the installer, check Windows Security protection

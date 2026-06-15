@@ -3,6 +3,8 @@ import base64
 import os
 import platform
 import shutil
+import socket
+import ssl
 import subprocess
 import threading
 import time
@@ -29,7 +31,7 @@ except Exception:
     pynput_keyboard = None
 
 APP_NAME = "SaySense"
-APP_VERSION = "1.5 Beta"
+APP_VERSION = "1.5.1 Beta"
 APP_TITLE = f"{APP_NAME} {APP_VERSION}"
 CPU_THREADS = min(os.cpu_count() or 4, 8)
 LOG_DIR = os.path.expanduser("~/.local/state/bananafone")
@@ -83,6 +85,7 @@ GEMINI_GENERATE_URL = os.environ.get(
     "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent",
 )
 SPEECH_PROVIDER_LABELS = {"openai": "OpenAI", "gemini": "Gemini"}
+NETWORK_RETRY_DELAYS = (0.0, 0.8, 1.8)
 
 TEXT_PROVIDERS = {
     "OpenAI (cloud)": "openai",
@@ -2260,7 +2263,7 @@ class DictationApp:
             self.root.after(0, self.after_transcription_error, "Could not understand the audio.")
         except Exception as exc:
             self.log_exception("process_audio failed")
-            self.root.after(0, self.after_transcription_error, f"Error: {str(exc)[:60]}")
+            self.root.after(0, self.after_transcription_error, f"Error: {str(exc)[:140]}")
 
     def after_no_audio(self):
         self.set_mode_button_states()
@@ -2408,6 +2411,40 @@ class DictationApp:
     def text_chat_url(self):
         return self.text_base_url.rstrip("/") + "/chat/completions"
 
+    def is_retryable_network_error(self, exc):
+        reason = getattr(exc, "reason", exc)
+        if isinstance(reason, (TimeoutError, socket.timeout, ConnectionError, ssl.SSLError)):
+            return True
+        text = str(reason).lower()
+        return any(
+            marker in text
+            for marker in (
+                "handshake",
+                "ssl",
+                "tls",
+                "timed out",
+                "connection reset",
+                "temporarily unavailable",
+                "remote end closed",
+            )
+        )
+
+    def open_url_with_retries(self, request, timeout, label):
+        last_error = None
+        for attempt, delay in enumerate(NETWORK_RETRY_DELAYS, start=1):
+            if delay:
+                time.sleep(delay)
+            try:
+                return urllib.request.urlopen(request, timeout=timeout)
+            except urllib.error.HTTPError:
+                raise
+            except urllib.error.URLError as exc:
+                last_error = exc
+                if not self.is_retryable_network_error(exc) or attempt == len(NETWORK_RETRY_DELAYS):
+                    break
+                self.log_exception(f"{label} network attempt {attempt} failed; retrying")
+        raise last_error
+
     def run_text_chat(self, messages, json_mode=False, timeout=90):
         model = self.text_model or PROVIDER_DEFAULT_MODEL.get(self.text_provider, DEFAULT_OPENAI_TEXT_MODEL)
         payload = {
@@ -2438,7 +2475,7 @@ class DictationApp:
             headers=headers,
         )
         try:
-            with urllib.request.urlopen(request, timeout=timeout) as response:
+            with self.open_url_with_retries(request, timeout=timeout, label="text provider") as response:
                 data = json.loads(response.read().decode("utf-8"))
         except urllib.error.HTTPError as exc:
             details = exc.read().decode("utf-8", errors="replace")
@@ -2498,12 +2535,19 @@ class DictationApp:
         )
 
         try:
-            with urllib.request.urlopen(request, timeout=120) as response:
+            with self.open_url_with_retries(request, timeout=120, label="OpenAI speech") as response:
                 payload = json.loads(response.read().decode("utf-8"))
         except urllib.error.HTTPError as exc:
             details = exc.read().decode("utf-8", errors="replace")
             raise RuntimeError(f"OpenAI HTTP {exc.code}: {details[:180]}")
         except urllib.error.URLError as exc:
+            if self.get_gemini_api_key():
+                try:
+                    return self.transcribe_with_gemini(pcm_audio)
+                except Exception as fallback_exc:
+                    raise RuntimeError(
+                        f"OpenAI network failure: {exc.reason}; Gemini fallback failed: {fallback_exc}"
+                    )
             raise RuntimeError(f"Network failure: {exc.reason}")
 
         text = (payload.get("text") or "").strip()
@@ -2554,7 +2598,7 @@ class DictationApp:
         )
 
         try:
-            with urllib.request.urlopen(request, timeout=120) as response:
+            with self.open_url_with_retries(request, timeout=120, label="Gemini speech") as response:
                 data = json.loads(response.read().decode("utf-8"))
         except urllib.error.HTTPError as exc:
             details = exc.read().decode("utf-8", errors="replace")
