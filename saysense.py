@@ -29,7 +29,7 @@ except Exception:
     pynput_keyboard = None
 
 APP_NAME = "SaySense"
-APP_VERSION = "1.4 Beta"
+APP_VERSION = "1.5 Beta"
 APP_TITLE = f"{APP_NAME} {APP_VERSION}"
 CPU_THREADS = min(os.cpu_count() or 4, 8)
 LOG_DIR = os.path.expanduser("~/.local/state/bananafone")
@@ -109,10 +109,15 @@ JIRA_PROMPT_MODE_FULL_CUSTOM = "full_custom"
 JIRA_PROMPT_MODES = (JIRA_PROMPT_MODE_BUILTIN_EXTRA, JIRA_PROMPT_MODE_FULL_CUSTOM)
 JIRA_HISTORY_LIMIT = 10
 REGENERATE_CHOICES = {
+    "Standard (Default)": "",
     "Shorter": "Rewrite both fields more concisely while preserving all facts.",
     "More technical": "Make the internal_note more technical and peer-oriented while keeping the customer_comment simple.",
     "More customer-friendly": "Make the customer_comment warmer and easier for a non-technical end user.",
     "Include follow-up": "Emphasize follow-up, monitoring, or next action when supported by the notes.",
+    "Escalation Handoff": "Format the internal note as an escalation handoff. Clearly highlight the exact symptoms, what troubleshooting steps were already attempted and failed, and explicitly state what you need the next tier to investigate.",
+    "Audit & Compliance": "Emphasize compliance and security in the internal note. Explicitly mention who approved the request, what security policies were followed, and ensure the tone is clinical and audit-ready.",
+    "Root Cause Analysis": "Structure the internal note as a Root Cause Analysis (RCA). Break it down into: Timeline, Root Cause, Mitigation applied, and Preventative Measures.",
+    "KB Article Draft": "Format the internal note as a generic Knowledge Base (KB) article draft. Abstract the specific user details and provide a clear step-by-step guide on how to solve this issue if it happens again.",
 }
 
 DEFAULT_SILENCE_TIMEOUT = os.environ.get("BANANAPHONE_V2_SILENCE_TIMEOUT", "4")
@@ -254,6 +259,7 @@ class DictationApp:
 
         self.settings = self.load_settings()
         self.default_mode_key = self.settings.get("default_mode", "slow")
+        self.default_regenerate_style = self.settings.get("default_regenerate_style", "Standard (Default)")
         self.default_input_language = self.settings.get("default_input_language", "en")
         self.default_output_target = self.settings.get("default_output", "en")
         self.default_jira_mode = self.settings.get("default_jira_mode", False)
@@ -476,7 +482,7 @@ class DictationApp:
         )
         self.clear_notes_button.pack(side=tk.LEFT, padx=(0, 6))
 
-        self.regenerate_var = tk.StringVar(value="Shorter")
+        self.regenerate_var = tk.StringVar(value=self.default_regenerate_style)
         self.regenerate_menu = ctk.CTkOptionMenu(
             self.jira_actions_frame,
             variable=self.regenerate_var,
@@ -1180,6 +1186,7 @@ class DictationApp:
     def write_settings(self):
         settings = {
             "default_mode": self.default_mode_key,
+            "default_regenerate_style": self.default_regenerate_style,
             "default_input_language": self.default_input_language,
             "default_output": self.default_output_target,
             "default_jira_mode": self.default_jira_mode,
@@ -1198,6 +1205,7 @@ class DictationApp:
 
     def save_current_as_default(self):
         self.default_mode_key = self.mode_key
+        self.default_regenerate_style = self.regenerate_var.get()
         self.default_input_language = self.input_language
         self.default_output_target = self.output_target
         self.default_jira_mode = self.jira_mode
@@ -2642,10 +2650,15 @@ class DictationApp:
             )
         return prompt
 
-    def transform_to_jira(self, text):
+    def transform_to_jira(self, text, style_instruction=None):
         source_name = LANGUAGES[self.input_language]["name"]
         language_name = LANGUAGES[self.output_target]["name"]
-        system_prompt = self.build_jira_system_prompt(source_name, language_name)
+        
+        extra = self.jira_extra_instructions
+        if style_instruction:
+            extra = (extra + "\n" + style_instruction).strip()
+            
+        system_prompt = self.build_jira_system_prompt(source_name, language_name, extra=extra)
 
         content = self.run_text_chat(
             [
