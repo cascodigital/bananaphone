@@ -31,7 +31,7 @@ except Exception:
     pynput_keyboard = None
 
 APP_NAME = "SaySense"
-APP_VERSION = "1.8 Beta"
+APP_VERSION = "1.8.1 Beta"
 APP_TITLE = f"{APP_NAME} {APP_VERSION}"
 CPU_THREADS = min(os.cpu_count() or 4, 8)
 LOG_DIR = os.path.expanduser("~/.local/state/bananafone")
@@ -513,6 +513,12 @@ class DictationApp:
         self.hold_button.pack(fill=tk.X, padx=4, pady=(0, 12))
 
         # Normal result area (Dictate) lives in the right column -------
+        self.dictate_header = ctk.CTkLabel(
+            self.right_col,
+            text="Transcript",
+            font=ctk.CTkFont(size=13, weight="bold"),
+            text_color=COLOR_TITLE,
+        )
         self.result_text = ctk.CTkTextbox(
             self.right_col,
             font=ctk.CTkFont(size=13),
@@ -1053,13 +1059,15 @@ class DictationApp:
 
     def refresh_output_panel(self):
         if self.jira_mode:
+            self.dictate_header.pack_forget()
             self.result_text.pack_forget()
             self.jira_controls_frame.pack(fill=tk.X, pady=(4, 0))
             self.jira_tabs.pack(fill=tk.BOTH, expand=True, padx=8, pady=8)
         else:
             self.jira_controls_frame.pack_forget()
             self.jira_tabs.pack_forget()
-            self.result_text.pack(fill=tk.BOTH, expand=True, padx=8, pady=8)
+            self.dictate_header.pack(anchor="w", padx=18, pady=(14, 4))
+            self.result_text.pack(fill=tk.BOTH, expand=True, padx=8, pady=(0, 8))
 
     def update_title(self):
         mode_label = "Jira Mode" if self.jira_mode else self.mode["label"]
