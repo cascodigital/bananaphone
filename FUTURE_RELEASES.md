@@ -1,41 +1,62 @@
 # Future Releases
 
-## Branding Polish
+Status as of v1.8.4-beta.
+
+## Done
+
+### Jira Profiles (v1.7) ✅
+- Structured, switchable profiles driving the built-in Jira prompt: tone,
+  length, internal-note section names and extra instructions — no prompt
+  editing required.
+- Built-in read-only presets: Company (Jira), Casco / MSP client, Internal
+  Helpdesk, Strict (factual). Clone-to-edit for custom profiles.
+- Quick profile switch in the Jira panel; full manager (new/clone/delete/
+  test) in the Jira Profiles dialog.
+- Full-custom prompt override kept as an advanced global escape hatch.
+- Legacy `jira_extra_instructions` auto-migrated into an editable profile.
+
+### Jira Mode behavior (v1.6) ✅
+- Entering Jira Mode (Dictate -> Jira) clears leftover notes so a previous
+  ticket's noise doesn't bleed into the next one.
+- Output language follows the OUTPUT selector even in Jira Mode (e.g. PT
+  output stays Portuguese), with a hard rule in the prompt.
+
+### Main window layout (v1.8 - v1.8.4) ✅
+- Two-column layout: left = controls, right = output panel at full window
+  height (notes area no longer one cramped line).
+- Dictate output uses a single-tab "Transcript" tabview, pixel-identical
+  to the Jira tabs (no size/position jump when switching modes).
+- Left column pinned to a fixed width (pack_propagate) so the variable
+  talk-button text no longer shifts the right panel between modes.
+
+### Call Notes ✅
+- Notes already carry timestamps; history preserves time and order.
+
+## Remaining
+
+### Branding Polish
 - Replace old banana-themed icon assets with SaySense-specific artwork.
-- Refresh README screenshots after the SaySense rename.
-- Consider a later compatibility migration from `bananafone` config/log names to
-  `saysense`, but only with automatic import of existing settings and history.
+- Refresh README screenshots for the new two-column UI.
+- Migrate config/log paths from `~/.config/bananafone` and
+  `~/.local/state/bananafone` to `saysense`, with automatic import of
+  existing settings and history. (Settings file is already `settings_v2.json`
+  but the parent dir is still `bananafone`.)
 
-## Profiles and Templates
-- Add selectable Jira documentation profiles:
-  - Default IT Support
-  - MSP
-  - Internal Helpdesk
-  - Field Support
-  - Strict Jira
-- Profiles should configure tone, output length, section names, and Jira Extra Instructions without requiring prompt editing.
+### Settings UX
+- Split the main Settings dialog into tabs or a scrollable layout
+  (General / AI Provider / Jira / Advanced). Currently a single flat window.
 
-## Settings UX
-- Split Settings into tabs or a scrollable layout:
-  - General
-  - AI Provider
-  - Jira
-  - Advanced
-- Keep advanced prompt override hidden away from the normal path.
+### Global Hotkeys (partial)
+- Only one global hotkey exists today (Ctrl+Shift+D quick dictation).
+- Add configurable global hotkeys for: push-to-talk, add Jira note,
+  generate Jira output, copy Customer Comment, copy Internal Note.
 
-## Call Notes
-- Add a call-notes mode with timestamps per captured note.
-- Preserve note order and time in the internal note when useful.
-
-## Global Hotkeys
-- Add configurable global hotkeys for:
-  - Push-to-talk
-  - Add Jira note
-  - Generate Jira output
-  - Copy Customer Comment
-  - Copy Internal Note
-
-## Installer and Updates
-- Add an in-app update check.
+### Installer and Updates
+- In-app update check.
 - Improve Windows installer trust/signing story.
 - Show version and changelog from inside the app.
+
+### Profile polish (nice-to-have)
+- Per-profile language hint / default OUTPUT language.
+- Reorder profiles in the dropdown.
+- Export/import profiles for sharing across machines.
