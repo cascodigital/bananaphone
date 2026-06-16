@@ -31,7 +31,7 @@ except Exception:
     pynput_keyboard = None
 
 APP_NAME = "SaySense"
-APP_VERSION = "1.8.2 Beta"
+APP_VERSION = "1.8.3 Beta"
 APP_TITLE = f"{APP_NAME} {APP_VERSION}"
 CPU_THREADS = min(os.cpu_count() or 4, 8)
 LOG_DIR = os.path.expanduser("~/.local/state/bananafone")
@@ -512,30 +512,19 @@ class DictationApp:
         )
         self.hold_button.pack(fill=tk.X, padx=4, pady=(0, 12))
 
-        # Normal result area (Dictate) lives in the right column -------
-        # Header rendered as a blue pill to mirror the selected Jira tab.
-        self.dictate_header = ctk.CTkButton(
+        # Normal result area (Dictate): a single-tab CTkTabview mirroring the
+        # Jira tabview exactly, so switching modes has zero size/position jump
+        # and the "Transcript" header is the native selected tab pill.
+        self.dictate_tabs = ctk.CTkTabview(
             self.right_col,
-            text="Transcript",
-            font=ctk.CTkFont(size=13, weight="bold"),
-            fg_color=BTN_PRIMARY,
-            hover_color=BTN_PRIMARY,
-            text_color="#ffffff",
+            fg_color=COLOR_CARD,
+            segmented_button_fg_color=COLOR_FIELD,
+            segmented_button_selected_color=BTN_PRIMARY,
+            segmented_button_selected_hover_color=BTN_PRIMARY_HOVER,
             corner_radius=12,
-            height=28,
-            width=110,
-            command=lambda: None,
         )
-        self.result_text = ctk.CTkTextbox(
-            self.right_col,
-            font=ctk.CTkFont(size=13),
-            fg_color=COLOR_FIELD,
-            border_color=COLOR_CARD_BORDER,
-            border_width=1,
-            corner_radius=8,
-            wrap="word",
-        )
-        self.result_text.configure(state="disabled")
+        self.transcript_tab = self.dictate_tabs.add("Transcript")
+        self.result_text = self._build_panel_textbox(self.transcript_tab)
 
         # Jira controls (left column) ----------------------------------
         self.jira_controls_frame = ctk.CTkFrame(left_col, fg_color="transparent")
@@ -1066,15 +1055,13 @@ class DictationApp:
 
     def refresh_output_panel(self):
         if self.jira_mode:
-            self.dictate_header.pack_forget()
-            self.result_text.pack_forget()
+            self.dictate_tabs.pack_forget()
             self.jira_controls_frame.pack(fill=tk.X, pady=(4, 0))
             self.jira_tabs.pack(fill=tk.BOTH, expand=True, padx=8, pady=8)
         else:
             self.jira_controls_frame.pack_forget()
             self.jira_tabs.pack_forget()
-            self.dictate_header.pack(anchor="w", padx=16, pady=(16, 6))
-            self.result_text.pack(fill=tk.BOTH, expand=True, padx=12, pady=(0, 12))
+            self.dictate_tabs.pack(fill=tk.BOTH, expand=True, padx=8, pady=8)
 
     def update_title(self):
         mode_label = "Jira Mode" if self.jira_mode else self.mode["label"]
