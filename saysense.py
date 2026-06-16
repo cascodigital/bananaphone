@@ -31,7 +31,7 @@ except Exception:
     pynput_keyboard = None
 
 APP_NAME = "SaySense"
-APP_VERSION = "1.6 Beta"
+APP_VERSION = "1.7 Beta"
 APP_TITLE = f"{APP_NAME} {APP_VERSION}"
 CPU_THREADS = min(os.cpu_count() or 4, 8)
 LOG_DIR = os.path.expanduser("~/.local/state/bananafone")
@@ -110,6 +110,65 @@ CLOUD_TEXT_PROVIDERS = ("openai", "gemini")
 JIRA_PROMPT_MODE_BUILTIN_EXTRA = "builtin_extra"
 JIRA_PROMPT_MODE_FULL_CUSTOM = "full_custom"
 JIRA_PROMPT_MODES = (JIRA_PROMPT_MODE_BUILTIN_EXTRA, JIRA_PROMPT_MODE_FULL_CUSTOM)
+
+# --- Jira profiles (structured, switchable presets) ---------------------
+JIRA_TONES = ["Professional", "Friendly", "Terse", "Formal"]
+JIRA_LENGTHS = ["Short", "Standard", "Detailed"]
+DEFAULT_JIRA_SECTIONS = ["Issue", "Investigation", "Actions", "Result", "Follow-up"]
+JIRA_TONE_PROMPT = {
+    "Professional": "Tone: professional and neutral, the standard support register.",
+    "Friendly": "Tone: warm, friendly and approachable while still professional.",
+    "Terse": "Tone: terse and to the point. Minimal words, no pleasantries.",
+    "Formal": "Tone: formal corporate register.",
+}
+JIRA_LENGTH_PROMPT = {
+    "Short": "Length: keep it short. customer_comment 1-2 sentences; internal_note one tight line per section.",
+    "Standard": "Length: standard. customer_comment 2-4 sentences; internal_note concise but complete.",
+    "Detailed": "Length: thorough. customer_comment 3-5 sentences; internal_note detailed under each section.",
+}
+DEFAULT_PROFILE_ID = "default"
+BUILTIN_JIRA_PROFILES = [
+    {
+        "id": DEFAULT_PROFILE_ID,
+        "name": "Company (Jira)",
+        "builtin": True,
+        "tone": "Professional",
+        "length": "Standard",
+        "sections": list(DEFAULT_JIRA_SECTIONS),
+        "extra": "",
+    },
+    {
+        "id": "casco_msp",
+        "name": "Casco / MSP client",
+        "builtin": True,
+        "tone": "Friendly",
+        "length": "Standard",
+        "sections": list(DEFAULT_JIRA_SECTIONS),
+        "extra": "This goes to an external managed-services client. Keep the customer_comment "
+                 "warm and reassuring, reinforcing that the issue is being handled. Reference SLA "
+                 "or contract terms only when the dictation mentions them; never invent them.",
+    },
+    {
+        "id": "internal_helpdesk",
+        "name": "Internal Helpdesk",
+        "builtin": True,
+        "tone": "Terse",
+        "length": "Short",
+        "sections": list(DEFAULT_JIRA_SECTIONS),
+        "extra": "Audience is an internal team. Skip commercial niceties. customer_comment can be "
+                 "a brief direct update to a colleague; internal_note stays technical and dense.",
+    },
+    {
+        "id": "strict",
+        "name": "Strict (factual)",
+        "builtin": True,
+        "tone": "Terse",
+        "length": "Short",
+        "sections": list(DEFAULT_JIRA_SECTIONS),
+        "extra": "Minimal and strictly factual. No empathy, no filler, no softening. Record only "
+                 "what the dictation states.",
+    },
+]
 JIRA_HISTORY_LIMIT = 10
 REGENERATE_CHOICES = {
     "Standard (Default)": "",
@@ -279,6 +338,19 @@ class DictationApp:
         self.jira_extra_instructions = self.settings.get("jira_extra_instructions", "")
         self.jira_prompt_mode = self.settings.get("jira_prompt_mode", JIRA_PROMPT_MODE_BUILTIN_EXTRA)
         self.jira_custom_prompt = self.settings.get("jira_custom_prompt", "")
+        self.jira_user_profiles = [
+            self.normalize_jira_profile(p) for p in self.settings.get("jira_profiles", [])
+        ]
+        self.active_jira_profile_id = self.settings.get("active_jira_profile") or DEFAULT_PROFILE_ID
+        # One-time migration: fold a legacy global extra-instructions blob into an
+        # editable profile so existing users don't silently lose it.
+        if self.jira_extra_instructions.strip() and not self.jira_user_profiles:
+            migrated = self.normalize_jira_profile({
+                "name": "My Notes (migrated)",
+                "extra": self.jira_extra_instructions,
+            })
+            self.jira_user_profiles.append(migrated)
+            self.active_jira_profile_id = migrated["id"]
         self.mode_key = self.default_mode_key
         self.mode = MODES[self.mode_key]
         self.model = None
@@ -511,6 +583,30 @@ class DictationApp:
             command=self.regenerate_jira_output,
         )
         self.regenerate_button.pack(side=tk.LEFT, padx=(0, 6))
+
+        self.jira_profile_frame = ctk.CTkFrame(self.jira_frame, fg_color="transparent")
+        self.jira_profile_frame.pack(fill=tk.X, pady=(0, 8))
+        ctk.CTkLabel(
+            self.jira_profile_frame,
+            text="PROFILE",
+            font=ctk.CTkFont(size=10, weight="bold"),
+            text_color=COLOR_MUTED,
+        ).pack(side=tk.LEFT, padx=(2, 8))
+        self.jira_profile_var = tk.StringVar(value=self.active_profile()["name"])
+        self.jira_profile_menu = ctk.CTkOptionMenu(
+            self.jira_profile_frame,
+            variable=self.jira_profile_var,
+            values=self.jira_profile_names(),
+            command=self.on_jira_profile_selected,
+            font=ctk.CTkFont(size=12),
+            fg_color=COLOR_FIELD,
+            button_color=BTN_NEUTRAL,
+            button_hover_color=BTN_NEUTRAL_HOVER,
+            corner_radius=8,
+            dropdown_fg_color=COLOR_CARD,
+            dropdown_hover_color=BTN_PRIMARY,
+        )
+        self.jira_profile_menu.pack(side=tk.LEFT, fill=tk.X, expand=True)
 
         self.jira_tabs = ctk.CTkTabview(
             self.jira_frame,
@@ -1175,6 +1271,10 @@ class DictationApp:
         if jira_prompt_mode not in JIRA_PROMPT_MODES:
             jira_prompt_mode = JIRA_PROMPT_MODE_BUILTIN_EXTRA
         jira_custom_prompt = str(settings.get("jira_custom_prompt", "")).strip()
+        jira_profiles = settings.get("jira_profiles", [])
+        if not isinstance(jira_profiles, list):
+            jira_profiles = []
+        active_jira_profile = str(settings.get("active_jira_profile", "") or "").strip()
         return {
             "default_mode": default_mode,
             "default_input_language": default_input_language,
@@ -1189,6 +1289,8 @@ class DictationApp:
             "jira_extra_instructions": jira_extra_instructions,
             "jira_prompt_mode": jira_prompt_mode,
             "jira_custom_prompt": jira_custom_prompt,
+            "jira_profiles": jira_profiles,
+            "active_jira_profile": active_jira_profile,
         }
 
     def write_settings(self):
@@ -1207,6 +1309,11 @@ class DictationApp:
             "jira_extra_instructions": self.jira_extra_instructions,
             "jira_prompt_mode": self.jira_prompt_mode,
             "jira_custom_prompt": self.jira_custom_prompt,
+            "jira_profiles": [
+                {k: v for k, v in p.items() if k != "builtin"}
+                for p in self.jira_user_profiles
+            ],
+            "active_jira_profile": self.active_jira_profile_id,
         }
         with open(SETTINGS_FILE, "w", encoding="utf-8") as handle:
             json.dump(settings, handle, indent=2)
@@ -1759,12 +1866,25 @@ class DictationApp:
             command=save_settings,
         ).pack(side=tk.LEFT)
 
+    def on_jira_profile_selected(self, _name=None):
+        profile = self.profile_by_name(self.jira_profile_var.get())
+        if not profile:
+            return
+        self.active_jira_profile_id = profile["id"]
+        self.write_settings()
+        self.refresh_jira_instructions_status_label()
+        self.update_status(f"Jira profile: {profile['name']}", COLOR_OK)
+
+    def refresh_jira_profile_menu(self):
+        menu = getattr(self, "jira_profile_menu", None)
+        if menu is not None and menu.winfo_exists():
+            menu.configure(values=self.jira_profile_names())
+            self.jira_profile_var.set(self.active_profile()["name"])
+
     def jira_instructions_status(self):
         if self.jira_prompt_mode == JIRA_PROMPT_MODE_FULL_CUSTOM:
             return "Full custom prompt active"
-        if self.jira_extra_instructions.strip():
-            return "Extra instructions active"
-        return "Built-in defaults"
+        return f"Profile: {self.active_profile()['name']}"
 
     def refresh_jira_instructions_status_label(self):
         label = getattr(self, "jira_instructions_status_label", None)
@@ -1776,143 +1896,267 @@ class DictationApp:
             return
 
         dialog = ctk.CTkToplevel(self.root)
-        dialog.title("Jira Extra Instructions")
-        dialog.geometry("640x720")
+        dialog.title("Jira Profiles")
+        dialog.geometry("660x820")
         dialog.configure(fg_color=COLOR_WINDOW)
         dialog.transient(self.root)
         dialog.after(50, dialog.grab_set)
+
+        # Working copy: edits live here until Save commits them.
+        wp = [dict(p) for p in self.all_jira_profiles()]
+        state = {"sel_id": self.active_profile()["id"]}
 
         body = ctk.CTkFrame(dialog, fg_color="transparent")
         body.pack(fill=tk.BOTH, expand=True, padx=22, pady=20)
 
         ctk.CTkLabel(
             body,
-            text="Jira Extra Instructions",
+            text="Jira Profiles",
             font=ctk.CTkFont(size=15, weight="bold"),
             text_color=COLOR_TITLE,
         ).pack(anchor="w")
         ctk.CTkLabel(
             body,
-            text="Added after the built-in Jira rules. Use this for client-specific tone, section names, or documentation habits.",
+            text="Switchable presets that shape Jira output: tone, length, section names and extra "
+                 "instructions. The selected profile becomes active when you Save. Built-in profiles "
+                 "are read-only — clone one to customize.",
             font=ctk.CTkFont(size=11),
             text_color=COLOR_SUBTLE,
-            wraplength=560,
+            wraplength=580,
             justify="left",
-        ).pack(anchor="w", pady=(2, 8))
+        ).pack(anchor="w", pady=(2, 10))
 
-        extra_box = ctk.CTkTextbox(
-            body,
-            height=150,
+        def find(profile_id):
+            for p in wp:
+                if p["id"] == profile_id:
+                    return p
+            return wp[0]
+
+        def names():
+            return [p["name"] for p in wp]
+
+        def unique_name(base, ignore_id=None):
+            existing = {p["name"] for p in wp if p["id"] != ignore_id}
+            if base not in existing:
+                return base
+            i = 2
+            while f"{base} {i}" in existing:
+                i += 1
+            return f"{base} {i}"
+
+        # --- selector row ---
+        sel_row = ctk.CTkFrame(body, fg_color="transparent")
+        sel_row.pack(fill=tk.X, pady=(0, 12))
+        profile_var = tk.StringVar(value=find(state["sel_id"])["name"])
+        profile_menu = ctk.CTkOptionMenu(
+            sel_row,
+            variable=profile_var,
+            values=names(),
+            width=220,
             font=ctk.CTkFont(size=12),
             fg_color=COLOR_FIELD,
-            border_color=COLOR_CARD_BORDER,
-            border_width=1,
-            corner_radius=10,
-            wrap="word",
+            button_color=BTN_NEUTRAL,
+            button_hover_color=BTN_NEUTRAL_HOVER,
+            corner_radius=8,
+            dropdown_fg_color=COLOR_CARD,
+            dropdown_hover_color=BTN_PRIMARY,
         )
-        extra_box.pack(fill=tk.X, pady=(0, 12))
-        extra_box.insert("1.0", self.jira_extra_instructions)
+        profile_menu.pack(side=tk.LEFT)
 
+        # --- fields ---
+        name_var = tk.StringVar()
+        ctk.CTkLabel(body, text="Name", font=ctk.CTkFont(size=11, weight="bold"),
+                     text_color=COLOR_MUTED).pack(anchor="w")
+        name_entry = ctk.CTkEntry(body, textvariable=name_var, font=ctk.CTkFont(size=12),
+                                  fg_color=COLOR_FIELD, corner_radius=8)
+        name_entry.pack(fill=tk.X, pady=(2, 10))
+
+        knobs = ctk.CTkFrame(body, fg_color="transparent")
+        knobs.pack(fill=tk.X, pady=(0, 10))
+        tone_var = tk.StringVar(value="Professional")
+        length_var = tk.StringVar(value="Standard")
+        ctk.CTkLabel(knobs, text="Tone", font=ctk.CTkFont(size=11, weight="bold"),
+                     text_color=COLOR_MUTED).grid(row=0, column=0, sticky="w", padx=(0, 12))
+        ctk.CTkLabel(knobs, text="Length", font=ctk.CTkFont(size=11, weight="bold"),
+                     text_color=COLOR_MUTED).grid(row=0, column=1, sticky="w")
+        tone_menu = ctk.CTkOptionMenu(knobs, variable=tone_var, values=JIRA_TONES, width=200,
+                                      font=ctk.CTkFont(size=12), fg_color=COLOR_FIELD,
+                                      button_color=BTN_NEUTRAL, button_hover_color=BTN_NEUTRAL_HOVER,
+                                      corner_radius=8, dropdown_fg_color=COLOR_CARD,
+                                      dropdown_hover_color=BTN_PRIMARY)
+        tone_menu.grid(row=1, column=0, sticky="w", padx=(0, 12), pady=(2, 0))
+        length_menu = ctk.CTkOptionMenu(knobs, variable=length_var, values=JIRA_LENGTHS, width=200,
+                                        font=ctk.CTkFont(size=12), fg_color=COLOR_FIELD,
+                                        button_color=BTN_NEUTRAL, button_hover_color=BTN_NEUTRAL_HOVER,
+                                        corner_radius=8, dropdown_fg_color=COLOR_CARD,
+                                        dropdown_hover_color=BTN_PRIMARY)
+        length_menu.grid(row=1, column=1, sticky="w", pady=(2, 0))
+
+        ctk.CTkLabel(body, text="Internal note sections (one per line)",
+                     font=ctk.CTkFont(size=11, weight="bold"), text_color=COLOR_MUTED).pack(anchor="w")
+        sections_box = ctk.CTkTextbox(body, height=110, font=ctk.CTkFont(size=12), fg_color=COLOR_FIELD,
+                                      border_color=COLOR_CARD_BORDER, border_width=1, corner_radius=10,
+                                      wrap="word")
+        sections_box.pack(fill=tk.X, pady=(2, 10))
+
+        ctk.CTkLabel(body, text="Extra instructions",
+                     font=ctk.CTkFont(size=11, weight="bold"), text_color=COLOR_MUTED).pack(anchor="w")
+        extra_box = ctk.CTkTextbox(body, height=120, font=ctk.CTkFont(size=12), fg_color=COLOR_FIELD,
+                                   border_color=COLOR_CARD_BORDER, border_width=1, corner_radius=10,
+                                   wrap="word")
+        extra_box.pack(fill=tk.X, pady=(2, 8))
+
+        builtin_note = ctk.CTkLabel(body, text="", font=ctk.CTkFont(size=11),
+                                    text_color=COLOR_WARN, wraplength=580, justify="left")
+        builtin_note.pack(anchor="w", pady=(0, 6))
+
+        # --- advanced full-custom override (global) ---
         advanced_var = tk.BooleanVar(value=self.jira_prompt_mode == JIRA_PROMPT_MODE_FULL_CUSTOM)
-        advanced_toggle = ctk.CTkCheckBox(
-            body,
-            text="Show advanced prompt override",
-            variable=advanced_var,
-            font=ctk.CTkFont(size=12),
-            fg_color=BTN_PRIMARY,
-            hover_color=BTN_PRIMARY_HOVER,
-        )
-        advanced_toggle.pack(anchor="w", pady=(0, 8))
-
+        advanced_toggle = ctk.CTkCheckBox(body, text="Advanced: full custom prompt override (ignores profiles)",
+                                          variable=advanced_var, font=ctk.CTkFont(size=12),
+                                          fg_color=BTN_PRIMARY, hover_color=BTN_PRIMARY_HOVER)
+        advanced_toggle.pack(anchor="w", pady=(0, 6))
         advanced_frame = ctk.CTkFrame(body, fg_color=COLOR_CARD, corner_radius=10)
-        ctk.CTkLabel(
-            advanced_frame,
-            text="Full custom Jira prompt",
-            font=ctk.CTkFont(size=13, weight="bold"),
-            text_color=COLOR_TITLE,
-        ).pack(anchor="w", padx=12, pady=(12, 2))
-        ctk.CTkLabel(
-            advanced_frame,
-            text="Replaces the built-in Jira instructions. If it does not return JSON with customer_comment and internal_note, generation fails.",
-            font=ctk.CTkFont(size=11),
-            text_color=COLOR_WARN,
-            wraplength=550,
-            justify="left",
-        ).pack(anchor="w", padx=12, pady=(0, 8))
-        custom_box = ctk.CTkTextbox(
-            advanced_frame,
-            height=170,
-            font=ctk.CTkFont(size=12),
-            fg_color=COLOR_FIELD,
-            border_color=COLOR_CARD_BORDER,
-            border_width=1,
-            corner_radius=10,
-            wrap="word",
-        )
+        ctk.CTkLabel(advanced_frame,
+                     text="Replaces ALL profile logic. Must return JSON with customer_comment and internal_note.",
+                     font=ctk.CTkFont(size=11), text_color=COLOR_WARN, wraplength=550,
+                     justify="left").pack(anchor="w", padx=12, pady=(10, 6))
+        custom_box = ctk.CTkTextbox(advanced_frame, height=120, font=ctk.CTkFont(size=12), fg_color=COLOR_FIELD,
+                                    border_color=COLOR_CARD_BORDER, border_width=1, corner_radius=10, wrap="word")
         custom_box.pack(fill=tk.X, padx=12, pady=(0, 10))
         custom_box.insert("1.0", self.jira_custom_prompt)
 
         def update_advanced_visibility():
             if advanced_var.get():
-                advanced_frame.pack(fill=tk.X, pady=(0, 12))
+                advanced_frame.pack(fill=tk.X, pady=(0, 10))
             else:
                 advanced_frame.pack_forget()
 
         advanced_toggle.configure(command=update_advanced_visibility)
-        update_advanced_visibility()
 
-        status_label = ctk.CTkLabel(
-            body,
-            text="",
-            font=ctk.CTkFont(size=11),
-            text_color=COLOR_MUTED,
-            wraplength=560,
-            justify="left",
-        )
-        status_label.pack(anchor="w", pady=(0, 8))
+        status_label = ctk.CTkLabel(body, text="", font=ctk.CTkFont(size=11), text_color=COLOR_MUTED,
+                                    wraplength=580, justify="left")
+        status_label.pack(anchor="w", pady=(4, 8))
 
         def set_status(message, color=COLOR_MUTED):
             if status_label.winfo_exists():
                 status_label.configure(text=message, text_color=color)
 
-        def current_prompt_values():
-            extra = extra_box.get("1.0", "end").strip()
-            custom = custom_box.get("1.0", "end").strip()
-            mode = JIRA_PROMPT_MODE_FULL_CUSTOM if advanced_var.get() else JIRA_PROMPT_MODE_BUILTIN_EXTRA
-            return mode, extra, custom
+        def set_fields_editable(editable):
+            field_state = "normal" if editable else "disabled"
+            name_entry.configure(state=field_state)
+            tone_menu.configure(state=field_state)
+            length_menu.configure(state=field_state)
+            sections_box.configure(state=field_state)
+            extra_box.configure(state=field_state)
 
-        def save_values(close_dialog=True):
-            mode, extra, custom = current_prompt_values()
-            if mode == JIRA_PROMPT_MODE_FULL_CUSTOM and not custom:
-                set_status("Full custom prompt is enabled but empty.", COLOR_ERROR)
+        def load_fields(profile):
+            set_fields_editable(True)
+            name_var.set(profile["name"])
+            tone_var.set(profile["tone"])
+            length_var.set(profile["length"])
+            sections_box.delete("1.0", "end")
+            sections_box.insert("1.0", "\n".join(profile["sections"]))
+            extra_box.delete("1.0", "end")
+            extra_box.insert("1.0", profile.get("extra", ""))
+            if profile.get("builtin"):
+                set_fields_editable(False)
+                builtin_note.configure(text="Built-in profile — read-only. Click Clone to make an editable copy.")
+            else:
+                builtin_note.configure(text="")
+
+        def collect_into(profile):
+            # Persist current widget values back into the working dict (editable only).
+            if profile.get("builtin"):
+                return
+            sections = [s.strip() for s in sections_box.get("1.0", "end").splitlines() if s.strip()]
+            profile["name"] = unique_name(name_var.get().strip() or "Untitled", ignore_id=profile["id"])
+            profile["tone"] = tone_var.get() if tone_var.get() in JIRA_TONES else "Professional"
+            profile["length"] = length_var.get() if length_var.get() in JIRA_LENGTHS else "Standard"
+            profile["sections"] = sections or list(DEFAULT_JIRA_SECTIONS)
+            profile["extra"] = extra_box.get("1.0", "end").strip()
+
+        def on_select(_name=None):
+            target = None
+            for p in wp:
+                if p["name"] == profile_var.get():
+                    target = p
+                    break
+            if target is None:
+                return
+            collect_into(find(state["sel_id"]))
+            state["sel_id"] = target["id"]
+            load_fields(target)
+
+        profile_menu.configure(command=on_select)
+
+        def refresh_menu(select_id=None):
+            collect_into(find(state["sel_id"]))
+            if select_id:
+                state["sel_id"] = select_id
+            profile_menu.configure(values=names())
+            profile_var.set(find(state["sel_id"])["name"])
+            load_fields(find(state["sel_id"]))
+
+        def new_profile():
+            p = self.normalize_jira_profile({"name": unique_name("New Profile")})
+            wp.append(p)
+            refresh_menu(select_id=p["id"])
+            set_status("New profile created. Edit and Save.", COLOR_OK)
+
+        def clone_profile():
+            src = find(state["sel_id"])
+            collect_into(src)
+            p = self.normalize_jira_profile({
+                "name": unique_name(f"{src['name']} copy"),
+                "tone": src["tone"], "length": src["length"],
+                "sections": list(src["sections"]), "extra": src.get("extra", ""),
+            })
+            wp.append(p)
+            refresh_menu(select_id=p["id"])
+            set_status("Cloned to an editable profile.", COLOR_OK)
+
+        def delete_profile():
+            src = find(state["sel_id"])
+            if src.get("builtin"):
+                set_status("Built-in profiles cannot be deleted.", COLOR_ERROR)
+                return
+            wp.remove(src)
+            state["sel_id"] = wp[0]["id"]
+            refresh_menu()
+            set_status("Profile deleted. Save to confirm.", COLOR_WARN)
+
+        def save_all(close_dialog=True):
+            collect_into(find(state["sel_id"]))
+            custom = custom_box.get("1.0", "end").strip()
+            if advanced_var.get() and not custom:
+                set_status("Advanced override is enabled but empty.", COLOR_ERROR)
                 return False
-            self.jira_prompt_mode = mode
-            self.jira_extra_instructions = extra
+            self.jira_user_profiles = [
+                {k: v for k, v in p.items() if k != "builtin"}
+                for p in wp if not p.get("builtin")
+            ]
+            self.active_jira_profile_id = state["sel_id"]
+            self.jira_prompt_mode = (
+                JIRA_PROMPT_MODE_FULL_CUSTOM if advanced_var.get() else JIRA_PROMPT_MODE_BUILTIN_EXTRA
+            )
             self.jira_custom_prompt = custom
             self.write_settings()
+            self.refresh_jira_profile_menu()
             self.refresh_jira_instructions_status_label()
-            self.update_status("Jira instructions saved.", COLOR_OK)
+            self.update_status("Jira profiles saved.", COLOR_OK)
             set_status("Saved.", COLOR_OK)
             if close_dialog:
                 dialog.destroy()
             return True
 
-        def clear_extra():
-            extra_box.delete("1.0", "end")
-            set_status("Extra instructions cleared. Click Save to keep it.", COLOR_WARN)
-
-        def restore_builtin():
-            advanced_var.set(False)
-            extra_box.delete("1.0", "end")
-            custom_box.delete("1.0", "end")
-            update_advanced_visibility()
-            set_status("Built-in prompt restored. Click Save to keep it.", COLOR_WARN)
-
-        def test_worker(mode, extra, custom):
+        def test_worker(profile, mode, custom):
             try:
                 source_name = LANGUAGES[self.input_language]["name"]
                 language_name = LANGUAGES[self.output_target]["name"]
-                prompt = self.build_jira_system_prompt(source_name, language_name, mode, extra, custom)
+                prompt = self.build_jira_system_prompt(
+                    source_name, language_name, profile=profile, mode=mode, custom=custom
+                )
                 sample_note = (
                     "User reported that Outlook was not opening and showed an authentication error. "
                     "Checked M365 sign-in status, restarted Outlook, cleared cached credentials, and confirmed mail is syncing again. "
@@ -1933,75 +2177,39 @@ class DictationApp:
                 internal = str(parsed.get("internal_note", "")).strip()
                 if not customer or not internal:
                     raise RuntimeError("Missing customer_comment or internal_note")
-                self.root.after(0, set_status, "Test OK: prompt returned valid Jira JSON.", COLOR_OK)
+                self.root.after(0, set_status, "Test OK: profile returned valid Jira JSON.", COLOR_OK)
             except Exception as exc:
                 self.root.after(0, set_status, f"Test failed: {str(exc)[:120]}", COLOR_ERROR)
 
         def start_test():
-            mode, extra, custom = current_prompt_values()
+            collect_into(find(state["sel_id"]))
+            profile = self.normalize_jira_profile(find(state["sel_id"]))
+            mode = JIRA_PROMPT_MODE_FULL_CUSTOM if advanced_var.get() else JIRA_PROMPT_MODE_BUILTIN_EXTRA
+            custom = custom_box.get("1.0", "end").strip()
             if mode == JIRA_PROMPT_MODE_FULL_CUSTOM and not custom:
-                set_status("Full custom prompt is enabled but empty.", COLOR_ERROR)
+                set_status("Advanced override is enabled but empty.", COLOR_ERROR)
                 return
-            set_status("Testing prompt with a sample note...", COLOR_WARN)
-            threading.Thread(target=test_worker, args=(mode, extra, custom), daemon=True).start()
+            set_status("Testing with a sample note...", COLOR_WARN)
+            threading.Thread(target=test_worker, args=(profile, mode, custom), daemon=True).start()
+
+        def mk_btn(parent, text, cmd, color=BTN_NEUTRAL, hover=BTN_NEUTRAL_HOVER, width=90):
+            return ctk.CTkButton(parent, text=text, width=width, font=ctk.CTkFont(size=12, weight="bold"),
+                                 height=34, corner_radius=10, fg_color=color, hover_color=hover, command=cmd)
+
+        manage_row = ctk.CTkFrame(sel_row, fg_color="transparent")
+        manage_row.pack(side=tk.RIGHT)
+        mk_btn(manage_row, "New", new_profile, width=70).pack(side=tk.LEFT, padx=(0, 6))
+        mk_btn(manage_row, "Clone", clone_profile, width=70).pack(side=tk.LEFT, padx=(0, 6))
+        mk_btn(manage_row, "Delete", delete_profile, BTN_DANGER, BTN_DANGER_HOVER, width=70).pack(side=tk.LEFT)
 
         buttons = ctk.CTkFrame(body, fg_color="transparent")
         buttons.pack(side=tk.BOTTOM, anchor="e")
-        ctk.CTkButton(
-            buttons,
-            text="Test",
-            width=90,
-            font=ctk.CTkFont(size=12, weight="bold"),
-            height=34,
-            corner_radius=10,
-            fg_color=BTN_NEUTRAL,
-            hover_color=BTN_NEUTRAL_HOVER,
-            command=start_test,
-        ).pack(side=tk.LEFT, padx=(0, 8))
-        ctk.CTkButton(
-            buttons,
-            text="Clear Extra",
-            width=100,
-            font=ctk.CTkFont(size=12, weight="bold"),
-            height=34,
-            corner_radius=10,
-            fg_color=BTN_NEUTRAL,
-            hover_color=BTN_NEUTRAL_HOVER,
-            command=clear_extra,
-        ).pack(side=tk.LEFT, padx=(0, 8))
-        ctk.CTkButton(
-            buttons,
-            text="Restore Built-in",
-            width=130,
-            font=ctk.CTkFont(size=12, weight="bold"),
-            height=34,
-            corner_radius=10,
-            fg_color=BTN_DANGER,
-            hover_color=BTN_DANGER_HOVER,
-            command=restore_builtin,
-        ).pack(side=tk.LEFT, padx=(0, 8))
-        ctk.CTkButton(
-            buttons,
-            text="Cancel",
-            width=90,
-            font=ctk.CTkFont(size=12, weight="bold"),
-            height=34,
-            corner_radius=10,
-            fg_color=BTN_NEUTRAL,
-            hover_color=BTN_NEUTRAL_HOVER,
-            command=dialog.destroy,
-        ).pack(side=tk.LEFT, padx=(0, 8))
-        ctk.CTkButton(
-            buttons,
-            text="Save",
-            width=90,
-            font=ctk.CTkFont(size=12, weight="bold"),
-            height=34,
-            corner_radius=10,
-            fg_color=BTN_GOOD,
-            hover_color=BTN_GOOD_HOVER,
-            command=lambda: save_values(close_dialog=True),
-        ).pack(side=tk.LEFT)
+        mk_btn(buttons, "Test", start_test).pack(side=tk.LEFT, padx=(0, 8))
+        mk_btn(buttons, "Cancel", dialog.destroy).pack(side=tk.LEFT, padx=(0, 8))
+        mk_btn(buttons, "Save", lambda: save_all(True), BTN_GOOD, BTN_GOOD_HOVER).pack(side=tk.LEFT)
+
+        load_fields(find(state["sel_id"]))
+        update_advanced_visibility()
 
     def ensure_model_loaded_async(self, mode_key):
         if self.model_key_loaded == mode_key and self.model is not None:
@@ -2651,15 +2859,79 @@ class DictationApp:
             ]
         )
 
-    def build_jira_system_prompt(self, source_name, language_name, mode=None, extra=None, custom=None):
+    # --- Jira profiles ------------------------------------------------
+    def normalize_jira_profile(self, raw, builtin=False):
+        raw = raw or {}
+        sections = raw.get("sections")
+        if isinstance(sections, list):
+            sections = [str(s).strip() for s in sections if str(s).strip()]
+        else:
+            sections = []
+        if not sections:
+            sections = list(DEFAULT_JIRA_SECTIONS)
+        tone = raw.get("tone")
+        if tone not in JIRA_TONES:
+            tone = "Professional"
+        length = raw.get("length")
+        if length not in JIRA_LENGTHS:
+            length = "Standard"
+        name = str(raw.get("name") or "").strip() or "Untitled"
+        return {
+            "id": str(raw.get("id") or uuid.uuid4().hex),
+            "name": name,
+            "builtin": bool(builtin),
+            "tone": tone,
+            "length": length,
+            "sections": sections,
+            "extra": str(raw.get("extra") or "").strip(),
+        }
+
+    def all_jira_profiles(self):
+        builtins = [self.normalize_jira_profile(p, builtin=True) for p in BUILTIN_JIRA_PROFILES]
+        user = [self.normalize_jira_profile(p) for p in self.jira_user_profiles]
+        return builtins + user
+
+    def get_jira_profile(self, profile_id):
+        for profile in self.all_jira_profiles():
+            if profile["id"] == profile_id:
+                return profile
+        return self.all_jira_profiles()[0]
+
+    def active_profile(self):
+        return self.get_jira_profile(self.active_jira_profile_id)
+
+    def jira_profile_names(self):
+        return [profile["name"] for profile in self.all_jira_profiles()]
+
+    def profile_by_name(self, name):
+        for profile in self.all_jira_profiles():
+            if profile["name"] == name:
+                return profile
+        return None
+
+    def build_jira_system_prompt(self, source_name, language_name, profile=None, mode=None, custom=None):
         mode = mode or self.jira_prompt_mode
-        extra = self.jira_extra_instructions if extra is None else extra
         custom = self.jira_custom_prompt if custom is None else custom
         if mode == JIRA_PROMPT_MODE_FULL_CUSTOM:
             prompt = custom.strip()
             if not prompt:
                 raise RuntimeError("Full custom Jira prompt is empty")
             return prompt
+
+        profile = profile or self.active_profile()
+        section_desc = {
+            "Issue": "what was reported.",
+            "Investigation": "what was checked and how.",
+            "Actions": "concrete steps taken (include tools, commands, config changes, hostnames, "
+                       "ticket/asset IDs exactly as dictated).",
+            "Result": "current state — resolved, workaround in place, or pending.",
+            "Follow-up": "anything to monitor or do next. Write 'None' if truly nothing.",
+        }
+        sections = profile["sections"] or list(DEFAULT_JIRA_SECTIONS)
+        section_lines = "\n".join(
+            f"  {label}: {section_desc.get(label, 'the relevant details for this section.')}"
+            for label in sections
+        )
 
         prompt = (
             f"You are a senior IT support engineer turning ticket notes into clean Jira documentation "
@@ -2668,35 +2940,32 @@ class DictationApp:
             "Your job is to reconstruct a coherent ticket from them.\n\n"
             f"CRITICAL: Write ALL output exclusively in {language_name}, no matter what language "
             "the dictation is in. Never switch to another language.\n\n"
+            f"{JIRA_TONE_PROMPT.get(profile['tone'], '')}\n"
+            f"{JIRA_LENGTH_PROMPT.get(profile['length'], '')}\n\n"
             "Return STRICT JSON ONLY, no markdown, no prose outside the JSON, with exactly two keys: "
             "customer_comment and internal_note.\n\n"
             "=== customer_comment (PUBLIC — the end user reads this) ===\n"
-            "- Address the user directly and professionally.\n"
+            "- Address the user directly, matching the tone above.\n"
             "- Empathetic and reassuring, never robotic, never cold.\n"
             "- NO jargon, NO tool names, NO commands, NO internal blame, NO root-cause minutiae.\n"
             "- Confirm what was done in plain language and what the user can expect next.\n"
-            "- 2-4 sentences. Tight. No filler openers like 'I hope this finds you well'.\n\n"
+            "- No filler openers like 'I hope this finds you well'.\n\n"
             "=== internal_note (PRIVATE — support team only) ===\n"
             "- Full technical picture for a peer engineer. Direct, matter-of-fact, no softening.\n"
             "- Structure it under these labels, each on its own line, omitting any with no real content:\n"
-            "  Issue: what was reported.\n"
-            "  Investigation: what was checked and how.\n"
-            "  Actions: concrete steps taken (include tools, commands, config changes, hostnames, "
-            "ticket/asset IDs exactly as dictated).\n"
-            "  Result: current state — resolved, workaround in place, or pending.\n"
-            "  Follow-up: anything to monitor or do next. Write 'None' if truly nothing.\n\n"
+            f"{section_lines}\n\n"
             "=== HARD RULES ===\n"
             "- NEVER invent facts, numbers, names, error codes, or outcomes not present in the dictation. "
             "Preserve every identifier (names, times, IPs, ticket IDs, error codes) verbatim.\n"
             "- If the dictation does not describe a completed resolution, do NOT pretend the ticket is "
-            "closed: write Result as a progress update and reflect that in the customer_comment.\n"
+            "closed: write the closing section as a progress update and reflect that in the customer_comment.\n"
             "- If the dictation is too thin to fill a section, leave it out rather than padding it.\n"
-            "- Both fields must be written in fluent, native-level {language_name}.\n"
-        ).replace("{language_name}", language_name)
-        extra = extra.strip()
+            f"- Both fields must be written in fluent, native-level {language_name}.\n"
+        )
+        extra = (profile.get("extra") or "").strip()
         if extra:
             prompt += (
-                "\n\n=== JIRA EXTRA INSTRUCTIONS (USER CONFIGURED) ===\n"
+                "\n\n=== JIRA EXTRA INSTRUCTIONS (PROFILE) ===\n"
                 f"{extra}\n"
             )
         return prompt
@@ -2704,12 +2973,12 @@ class DictationApp:
     def transform_to_jira(self, text, style_instruction=None):
         source_name = LANGUAGES[self.input_language]["name"]
         language_name = LANGUAGES[self.output_target]["name"]
-        
-        extra = self.jira_extra_instructions
+
+        profile = dict(self.active_profile())
         if style_instruction:
-            extra = (extra + "\n" + style_instruction).strip()
-            
-        system_prompt = self.build_jira_system_prompt(source_name, language_name, extra=extra)
+            profile["extra"] = (profile.get("extra", "") + "\n" + style_instruction).strip()
+
+        system_prompt = self.build_jira_system_prompt(source_name, language_name, profile=profile)
 
         content = self.run_text_chat(
             [
