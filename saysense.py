@@ -31,7 +31,7 @@ except Exception:
     pynput_keyboard = None
 
 APP_NAME = "SaySense"
-APP_VERSION = "1.8.3 Beta"
+APP_VERSION = "1.8.4 Beta"
 APP_TITLE = f"{APP_NAME} {APP_VERSION}"
 CPU_THREADS = min(os.cpu_count() or 4, 8)
 LOG_DIR = os.path.expanduser("~/.local/state/bananafone")
@@ -408,11 +408,13 @@ class DictationApp:
 
         # Two-column shell: left = controls, right = output panel -------
         container.grid_rowconfigure(0, weight=1)
-        container.grid_columnconfigure(0, weight=0, minsize=320)
+        container.grid_columnconfigure(0, weight=0, minsize=360)
         container.grid_columnconfigure(1, weight=1)
-        left_col = ctk.CTkFrame(container, fg_color="transparent", width=320)
+        left_col = ctk.CTkFrame(container, fg_color="transparent", width=360)
         left_col.grid(row=0, column=0, sticky="nsew", padx=(0, 14))
-        left_col.grid_propagate(False)
+        # Children are pack-managed, so pack_propagate(False) is what keeps the
+        # column at a fixed width regardless of the (variable) talk-button text.
+        left_col.pack_propagate(False)
         self.right_col = ctk.CTkFrame(
             container,
             fg_color=COLOR_CARD,
