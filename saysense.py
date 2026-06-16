@@ -31,7 +31,7 @@ except Exception:
     pynput_keyboard = None
 
 APP_NAME = "SaySense"
-APP_VERSION = "1.7 Beta"
+APP_VERSION = "1.8 Beta"
 APP_TITLE = f"{APP_NAME} {APP_VERSION}"
 CPU_THREADS = min(os.cpu_count() or 4, 8)
 LOG_DIR = os.path.expanduser("~/.local/state/bananafone")
@@ -313,8 +313,8 @@ class DictationApp:
     def __init__(self, root):
         self.root = root
         self.root.title(APP_TITLE)
-        self.root.geometry("560x740")
-        self.root.minsize(520, 700)
+        self.root.geometry("860x720")
+        self.root.minsize(820, 660)
         self.root.attributes("-topmost", True)
         self.root.configure(fg_color=COLOR_WINDOW)
         self.root.eval("tk::PlaceWindow . center")
@@ -406,8 +406,24 @@ class DictationApp:
         container = ctk.CTkFrame(self.root, fg_color=COLOR_WINDOW)
         container.pack(fill=tk.BOTH, expand=True, padx=20, pady=16)
 
+        # Two-column shell: left = controls, right = output panel -------
+        container.grid_rowconfigure(0, weight=1)
+        container.grid_columnconfigure(0, weight=0, minsize=320)
+        container.grid_columnconfigure(1, weight=1)
+        left_col = ctk.CTkFrame(container, fg_color="transparent", width=320)
+        left_col.grid(row=0, column=0, sticky="nsew", padx=(0, 14))
+        left_col.grid_propagate(False)
+        self.right_col = ctk.CTkFrame(
+            container,
+            fg_color=COLOR_CARD,
+            border_color=COLOR_CARD_BORDER,
+            border_width=1,
+            corner_radius=14,
+        )
+        self.right_col.grid(row=0, column=1, sticky="nsew")
+
         # Header --------------------------------------------------------
-        header = ctk.CTkFrame(container, fg_color="transparent")
+        header = ctk.CTkFrame(left_col, fg_color="transparent")
         header.pack(fill=tk.X)
         self.title_label = ctk.CTkLabel(
             header,
@@ -421,13 +437,13 @@ class DictationApp:
             text="Loading API mode...",
             font=ctk.CTkFont(size=13),
             text_color=COLOR_MUTED,
-            wraplength=480,
+            wraplength=300,
         )
         self.status_label.pack(pady=(2, 0))
 
         # Route card ----------------------------------------------------
         self.route_frame = ctk.CTkFrame(
-            container,
+            left_col,
             fg_color=COLOR_CARD,
             border_color=COLOR_CARD_BORDER,
             border_width=1,
@@ -466,40 +482,39 @@ class DictationApp:
             self.route_frame.grid_columnconfigure(column, weight=1)
 
         self.route_label = ctk.CTkLabel(
-            container,
+            left_col,
             text="Click to talk. Auto-stops after silence. Ctrl+Shift+D toggles quick dictation.",
             font=ctk.CTkFont(size=11),
             text_color=COLOR_SUBTLE,
-            wraplength=480,
+            wraplength=300,
         )
-        self.route_label.pack(pady=(0, 12))
+        self.route_label.pack(pady=(0, 10))
         self.privacy_label = ctk.CTkLabel(
-            container,
+            left_col,
             text="",
             font=ctk.CTkFont(size=11, weight="bold"),
             text_color=COLOR_MUTED,
-            wraplength=480,
+            wraplength=300,
         )
-        self.privacy_label.pack(pady=(0, 10))
+        self.privacy_label.pack(pady=(0, 8))
 
         # Main talk button ---------------------------------------------
         self.hold_button = ctk.CTkButton(
-            container,
+            left_col,
             text="PRESS TO TALK",
             font=ctk.CTkFont(size=17, weight="bold"),
-            height=72,
+            height=64,
             corner_radius=16,
             fg_color=TALK_IDLE,
             hover_color=TALK_IDLE_HOVER,
             text_color=TALK_IDLE_TEXT,
             command=self.on_main_button_click,
         )
-        self.hold_button.pack(fill=tk.X, padx=4, pady=(0, 14))
+        self.hold_button.pack(fill=tk.X, padx=4, pady=(0, 12))
 
-        # Normal result area -------------------------------------------
+        # Normal result area (Dictate) lives in the right column -------
         self.result_text = ctk.CTkTextbox(
-            container,
-            height=150,
+            self.right_col,
             font=ctk.CTkFont(size=13),
             fg_color=COLOR_FIELD,
             border_color=COLOR_CARD_BORDER,
@@ -509,10 +524,10 @@ class DictationApp:
         )
         self.result_text.configure(state="disabled")
 
-        # Jira panel ----------------------------------------------------
-        self.jira_frame = ctk.CTkFrame(container, fg_color="transparent")
+        # Jira controls (left column) ----------------------------------
+        self.jira_controls_frame = ctk.CTkFrame(left_col, fg_color="transparent")
 
-        self.jira_status_frame = ctk.CTkFrame(self.jira_frame, fg_color="transparent")
+        self.jira_status_frame = ctk.CTkFrame(self.jira_controls_frame, fg_color="transparent")
         self.jira_status_frame.pack(fill=tk.X, pady=(0, 6))
         self.jira_notes_count_label = ctk.CTkLabel(
             self.jira_status_frame,
@@ -529,8 +544,10 @@ class DictationApp:
         )
         self.last_generated_label.pack(side=tk.RIGHT)
 
-        self.jira_actions_frame = ctk.CTkFrame(self.jira_frame, fg_color="transparent")
+        self.jira_actions_frame = ctk.CTkFrame(self.jira_controls_frame, fg_color="transparent")
         self.jira_actions_frame.pack(fill=tk.X, pady=(0, 8))
+        self.jira_actions_frame.grid_columnconfigure(0, weight=1)
+        self.jira_actions_frame.grid_columnconfigure(1, weight=0)
 
         self.generate_jira_button = ctk.CTkButton(
             self.jira_actions_frame,
@@ -542,12 +559,12 @@ class DictationApp:
             hover_color=BTN_PRIMARY_HOVER,
             command=self.generate_jira_from_notes,
         )
-        self.generate_jira_button.pack(side=tk.LEFT, padx=(0, 6))
+        self.generate_jira_button.grid(row=0, column=0, sticky="ew", padx=(0, 6), pady=(0, 6))
 
         self.clear_notes_button = ctk.CTkButton(
             self.jira_actions_frame,
             text="Clear",
-            width=70,
+            width=90,
             font=ctk.CTkFont(size=12, weight="bold"),
             height=32,
             corner_radius=10,
@@ -555,26 +572,25 @@ class DictationApp:
             hover_color=BTN_DANGER_HOVER,
             command=self.clear_jira_notes,
         )
-        self.clear_notes_button.pack(side=tk.LEFT, padx=(0, 6))
+        self.clear_notes_button.grid(row=0, column=1, sticky="ew", pady=(0, 6))
 
         self.regenerate_var = tk.StringVar(value=self.default_regenerate_style)
         self.regenerate_menu = ctk.CTkOptionMenu(
             self.jira_actions_frame,
             variable=self.regenerate_var,
             values=list(REGENERATE_CHOICES.keys()),
-            width=145,
             font=ctk.CTkFont(size=12),
             fg_color=COLOR_FIELD,
             button_color=BTN_NEUTRAL,
             button_hover_color=BTN_NEUTRAL_HOVER,
             corner_radius=8,
         )
-        self.regenerate_menu.pack(side=tk.LEFT, padx=(0, 6))
+        self.regenerate_menu.grid(row=1, column=0, sticky="ew", padx=(0, 6))
 
         self.regenerate_button = ctk.CTkButton(
             self.jira_actions_frame,
             text="Regenerate",
-            width=100,
+            width=90,
             font=ctk.CTkFont(size=12, weight="bold"),
             height=32,
             corner_radius=10,
@@ -582,9 +598,9 @@ class DictationApp:
             hover_color=BTN_NEUTRAL_HOVER,
             command=self.regenerate_jira_output,
         )
-        self.regenerate_button.pack(side=tk.LEFT, padx=(0, 6))
+        self.regenerate_button.grid(row=1, column=1, sticky="ew")
 
-        self.jira_profile_frame = ctk.CTkFrame(self.jira_frame, fg_color="transparent")
+        self.jira_profile_frame = ctk.CTkFrame(self.jira_controls_frame, fg_color="transparent")
         self.jira_profile_frame.pack(fill=tk.X, pady=(0, 8))
         ctk.CTkLabel(
             self.jira_profile_frame,
@@ -609,15 +625,13 @@ class DictationApp:
         self.jira_profile_menu.pack(side=tk.LEFT, fill=tk.X, expand=True)
 
         self.jira_tabs = ctk.CTkTabview(
-            self.jira_frame,
+            self.right_col,
             fg_color=COLOR_CARD,
-            segmented_button_fg_color=COLOR_CARD,
+            segmented_button_fg_color=COLOR_FIELD,
             segmented_button_selected_color=BTN_PRIMARY,
             segmented_button_selected_hover_color=BTN_PRIMARY_HOVER,
             corner_radius=12,
-            height=210,
         )
-        self.jira_tabs.pack(fill=tk.BOTH, expand=True)
 
         self.raw_notes_tab = self.jira_tabs.add("Raw Notes")
         self.customer_tab = self.jira_tabs.add("Customer")
@@ -691,16 +705,16 @@ class DictationApp:
         ).pack(side=tk.LEFT)
 
         self.jira_validation_label = ctk.CTkLabel(
-            self.jira_frame,
+            self.jira_controls_frame,
             text="Output not generated yet",
             font=ctk.CTkFont(size=11),
             text_color=COLOR_SUBTLE,
-            wraplength=480,
+            wraplength=300,
         )
         self.jira_validation_label.pack(fill=tk.X, pady=(6, 0))
 
         # Bottom bar ----------------------------------------------------
-        self.bottom_frame = ctk.CTkFrame(container, fg_color="transparent")
+        self.bottom_frame = ctk.CTkFrame(left_col, fg_color="transparent")
         self.bottom_frame.pack(side=tk.BOTTOM, fill=tk.X, pady=(10, 0))
 
         self.cache_label = ctk.CTkLabel(
@@ -1040,10 +1054,12 @@ class DictationApp:
     def refresh_output_panel(self):
         if self.jira_mode:
             self.result_text.pack_forget()
-            self.jira_frame.pack(fill=tk.BOTH, expand=True, pady=(0, 8))
+            self.jira_controls_frame.pack(fill=tk.X, pady=(4, 0))
+            self.jira_tabs.pack(fill=tk.BOTH, expand=True, padx=8, pady=8)
         else:
-            self.jira_frame.pack_forget()
-            self.result_text.pack(fill=tk.BOTH, expand=True, padx=4, pady=(0, 8))
+            self.jira_controls_frame.pack_forget()
+            self.jira_tabs.pack_forget()
+            self.result_text.pack(fill=tk.BOTH, expand=True, padx=8, pady=8)
 
     def update_title(self):
         mode_label = "Jira Mode" if self.jira_mode else self.mode["label"]
