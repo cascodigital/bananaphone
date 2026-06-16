@@ -31,7 +31,7 @@ except Exception:
     pynput_keyboard = None
 
 APP_NAME = "SaySense"
-APP_VERSION = "1.5.1 Beta"
+APP_VERSION = "1.6 Beta"
 APP_TITLE = f"{APP_NAME} {APP_VERSION}"
 CPU_THREADS = min(os.cpu_count() or 4, 8)
 LOG_DIR = os.path.expanduser("~/.local/state/bananafone")
@@ -972,7 +972,12 @@ class DictationApp:
     def set_jira_mode(self, enabled, update_engine=True):
         if self.is_recording or self.model_loading or self.refreshing_models:
             return
+        was_enabled = self.jira_mode
         self.jira_mode = enabled
+        if enabled and not was_enabled:
+            # Fresh entry into Jira Mode: drop leftover notes from a previous
+            # ticket so dictate->jira->back transitions don't bleed noise in.
+            self.clear_jira_notes()
         if update_engine:
             self.engine_var.set("Jira Mode" if enabled else MODE_LABELS.get(self.mode_key, "Dictate"))
         self.update_title()
@@ -2661,6 +2666,8 @@ class DictationApp:
             f"written in {language_name}. The notes were dictated (originally in {source_name}, possibly "
             "already cleaned up), may be out of order, and may contain leftover speech-to-text artifacts. "
             "Your job is to reconstruct a coherent ticket from them.\n\n"
+            f"CRITICAL: Write ALL output exclusively in {language_name}, no matter what language "
+            "the dictation is in. Never switch to another language.\n\n"
             "Return STRICT JSON ONLY, no markdown, no prose outside the JSON, with exactly two keys: "
             "customer_comment and internal_note.\n\n"
             "=== customer_comment (PUBLIC — the end user reads this) ===\n"
