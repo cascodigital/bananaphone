@@ -33,7 +33,7 @@ except Exception:
     pynput_keyboard = None
 
 APP_NAME = "SaySense"
-APP_VERSION = "2.0"
+APP_VERSION = "2.0.1"
 APP_TITLE = f"{APP_NAME} {APP_VERSION}"
 
 # --- Self-update (GitHub Releases) -----------------------------------------
