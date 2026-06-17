@@ -27,9 +27,25 @@ history, defaults, and support notes. Public branding is SaySense; internal
 storage remains Bananafone/BananaPhone-compatible until a dedicated migration is
 implemented.
 
+## Canonical defaults (keep in sync across files)
+
+- **Default Ollama model: `qwen2.5:7b`.** The runtime source of truth is
+  `PROVIDER_DEFAULT_MODEL["ollama"]` in `saysense.py`. The provisioning scripts
+  `install.sh` and `install_windows.ps1` MUST pull this exact tag. If they
+  pull a different model (they used to pull `qwen2.5:3b`), the app requests a
+  model that was never pulled and the local endpoint returns
+  `404 model not found`. Change all three together or not at all.
+- **Whisper speech model: `medium`** (CPU, int8). The offline-download progress
+  bar estimates against `WHISPER_MEDIUM_EXPECTED_BYTES` (~1.5 GB).
+
 ## Release Checklist (DO THIS EVERY RELEASE — no exceptions)
 
-The app now self-updates by comparing `APP_VERSION` against the newest GitHub
+The maintainer (André) expects the AI assistant — whichever one is driving the
+session — to own the release end to end: bump, doc sync, commit, tag, push. Do
+not hand these steps back to him. This file is the source of truth; there is no
+external/Claude memory to rely on.
+
+The app self-updates by comparing `APP_VERSION` against the newest GitHub
 release tag (`saysense.py` -> `parse_version_key`). If `APP_VERSION` does not
 match the tag you push, the in-app update check is wrong by a version. So on
 **every** release, before tagging:
