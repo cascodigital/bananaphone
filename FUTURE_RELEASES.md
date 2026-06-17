@@ -7,8 +7,8 @@ Status as of v2.0.1.
 ### Generic Jira presets (v2.0.1) ✅
 - Renamed the default built-in Jira profile from a client-specific name to the
   generic "Company (Jira)" (id `default`). No client names in the source. A
-  saved `active_jira_profile: "default"` resolves gracefully to the default
-  built-in, so existing configs don't break.
+  saved `active_jira_profile` pointing at the old id resolves gracefully to the
+  default built-in (see `get_jira_profile`), so existing configs don't break.
 
 ### Offline-models UX + self-update (v2.0) ✅
 - Real progress bar during the "Download offline models" flow: the Whisper
