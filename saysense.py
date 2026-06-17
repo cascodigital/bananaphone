@@ -2,6 +2,7 @@
 import base64
 import os
 import platform
+import re
 import shutil
 import socket
 import ssl
@@ -9,6 +10,7 @@ import subprocess
 import threading
 import time
 import tkinter as tk
+import webbrowser
 from tkinter import messagebox
 import traceback
 import audioop
@@ -31,8 +33,87 @@ except Exception:
     pynput_keyboard = None
 
 APP_NAME = "SaySense"
-APP_VERSION = "1.9 Beta"
+APP_VERSION = "2.0"
 APP_TITLE = f"{APP_NAME} {APP_VERSION}"
+
+# --- Self-update (GitHub Releases) -----------------------------------------
+# Releases are all pre-releases (tags like v1.9-beta, v1.8.4-beta, v1.5-beta.1),
+# so /releases/latest (which skips pre-releases) is useless here -- we list
+# /releases and pick the highest-sorting tag ourselves.
+GITHUB_REPO = os.environ.get("SAYSENSE_GITHUB_REPO", "cascodigital/saysense")
+GITHUB_RELEASES_API = f"https://api.github.com/repos/{GITHUB_REPO}/releases?per_page=15"
+GITHUB_RELEASES_PAGE = f"https://github.com/{GITHUB_REPO}/releases/latest"
+
+# faster-whisper "medium" lives in this HF cache repo; ~1.53 GB of weights.
+# We poll the cache dir size during download to drive a real progress bar,
+# instead of depending on huggingface_hub's tqdm internals.
+WHISPER_MEDIUM_CACHE_DIR = os.path.join(
+    os.path.expanduser("~/.cache/huggingface/hub"),
+    "models--Systran--faster-whisper-medium",
+)
+WHISPER_MEDIUM_EXPECTED_BYTES = 1530 * 1024 * 1024
+
+
+def parse_version_key(text):
+    """Turn 'v1.9-beta', '1.8.4-beta.2', '1.9 Beta' into a comparable tuple.
+
+    Key = (major, minor, patch, stage, beta_number) where stage is 0 for a
+    beta and 1 for a final release, so a final 1.9 outranks 1.9-beta.3.
+    """
+    s = (text or "").strip().lower().lstrip("v").replace(" beta", "-beta")
+    is_beta = "beta" in s
+    head = re.split(r"[-\s]", s, 1)[0]
+    nums = [int(x) for x in re.findall(r"\d+", head)]
+    while len(nums) < 3:
+        nums.append(0)
+    rel = tuple(nums[:3])
+    beta_n = 0
+    if is_beta:
+        m = re.search(r"beta\.?(\d+)", s)
+        beta_n = int(m.group(1)) if m else 0
+    return rel + (0 if is_beta else 1, beta_n)
+
+
+def dir_size_bytes(path):
+    total = 0
+    try:
+        for root, _dirs, files in os.walk(path):
+            for name in files:
+                try:
+                    total += os.path.getsize(os.path.join(root, name))
+                except OSError:
+                    pass
+    except OSError:
+        pass
+    return total
+
+
+def find_ollama_binary():
+    """Locate the ollama executable, including the default Windows/macOS install
+    paths that aren't on PATH right after a fresh winget/installer run."""
+    found = shutil.which("ollama")
+    if found:
+        return found
+    candidates = []
+    system = platform.system()
+    if system == "Windows":
+        for env in ("LOCALAPPDATA", "PROGRAMFILES", "PROGRAMFILES(X86)"):
+            base = os.environ.get(env)
+            if base:
+                candidates.append(os.path.join(base, "Programs", "Ollama", "ollama.exe"))
+                candidates.append(os.path.join(base, "Ollama", "ollama.exe"))
+    elif system == "Darwin":
+        candidates += [
+            "/usr/local/bin/ollama",
+            "/opt/homebrew/bin/ollama",
+            "/Applications/Ollama.app/Contents/Resources/ollama",
+        ]
+    else:
+        candidates += ["/usr/local/bin/ollama", "/usr/bin/ollama"]
+    for c in candidates:
+        if c and os.path.isfile(c):
+            return c
+    return None
 CPU_THREADS = min(os.cpu_count() or 4, 8)
 LOG_DIR = os.path.expanduser("~/.local/state/bananafone")
 LOG_FILE = os.path.join(LOG_DIR, "saysense.log")
@@ -384,6 +465,7 @@ class DictationApp:
         self.jira_history = self.load_jira_history()
         self.last_jira_output = None
         self.generating_jira = False
+        self.update_dismissed_tag = self.settings.get("update_dismissed_tag", "")
 
         self.build_ui()
         self.setup_bindings()
@@ -404,6 +486,7 @@ class DictationApp:
             self.mode = MODES[self.mode_key]
         self.select_mode(self.mode_key)
         self.poll_command_file()
+        self.check_for_update_async()
 
     # ------------------------------------------------------------------ UI
     def build_ui(self):
@@ -1324,6 +1407,7 @@ class DictationApp:
             "jira_custom_prompt": jira_custom_prompt,
             "jira_profiles": jira_profiles,
             "active_jira_profile": active_jira_profile,
+            "update_dismissed_tag": str(settings.get("update_dismissed_tag", "")).strip(),
         }
 
     def write_settings(self):
@@ -1347,9 +1431,71 @@ class DictationApp:
                 for p in self.jira_user_profiles
             ],
             "active_jira_profile": self.active_jira_profile_id,
+            "update_dismissed_tag": self.update_dismissed_tag,
         }
         with open(SETTINGS_FILE, "w", encoding="utf-8") as handle:
             json.dump(settings, handle, indent=2)
+
+    # --------------------------------------------------------- self-update
+    def check_for_update_async(self):
+        threading.Thread(target=self._check_for_update_worker, daemon=True).start()
+
+    def _check_for_update_worker(self):
+        try:
+            request = urllib.request.Request(
+                GITHUB_RELEASES_API,
+                headers={
+                    "Accept": "application/vnd.github+json",
+                    "User-Agent": f"{APP_NAME}/{APP_VERSION}",
+                },
+            )
+            with urllib.request.urlopen(request, timeout=10) as resp:
+                releases = json.loads(resp.read().decode("utf-8"))
+        except Exception:
+            return  # offline / rate-limited / no network: stay quiet
+        if not isinstance(releases, list):
+            return
+        current = parse_version_key(APP_VERSION)
+        best = None
+        for release in releases:
+            if not isinstance(release, dict) or release.get("draft"):
+                continue
+            tag = release.get("tag_name") or ""
+            key = parse_version_key(tag)
+            if best is None or key > best[0]:
+                best = (key, tag, release.get("html_url") or GITHUB_RELEASES_PAGE)
+        if best is None or best[0] <= current:
+            return
+        _key, tag, url = best
+        self.root.after(0, self._notify_update_available, tag, url)
+
+    def _notify_update_available(self, tag, url):
+        self.update_status(
+            f"Update available: {tag} (you're on {APP_VERSION}). Download from GitHub.",
+            COLOR_WARN,
+        )
+        if self.update_dismissed_tag == tag:
+            return  # already prompted for this exact version
+        try:
+            open_now = messagebox.askyesno(
+                "SaySense update available",
+                f"A newer build is available: {tag}\n"
+                f"You're running {APP_VERSION}.\n\n"
+                "Open the download page now?",
+            )
+        except Exception:
+            open_now = False
+        if open_now:
+            try:
+                webbrowser.open(url)
+            except Exception:
+                pass
+        # Remember this tag so we don't nag on every launch.
+        self.update_dismissed_tag = tag
+        try:
+            self.write_settings()
+        except Exception:
+            pass
 
     def save_current_as_default(self):
         self.default_mode_key = self.mode_key
@@ -1636,6 +1782,23 @@ class DictationApp:
         )
         pull_status.pack(side=tk.LEFT, padx=(10, 0))
 
+        pull_progress = ctk.CTkProgressBar(body, height=10, corner_radius=6)
+        pull_progress.set(0.0)
+
+        def set_progress(fraction):
+            # fraction None -> hide the bar; otherwise show it clamped to [0,1].
+            if not pull_progress.winfo_exists():
+                return
+            if fraction is None:
+                pull_progress.pack_forget()
+                return
+            if not pull_progress.winfo_ismapped():
+                try:
+                    pull_progress.pack(fill="x", pady=(8, 0), after=local_model_row)
+                except Exception:
+                    pull_progress.pack(fill="x", pady=(8, 0))
+            pull_progress.set(max(0.0, min(1.0, float(fraction))))
+
         def ollama_root_from(base):
             base = base.strip().rstrip("/")
             if base.endswith("/v1"):
@@ -1657,6 +1820,7 @@ class DictationApp:
 
         def finish_pull(message, color):
             set_status(message, color)
+            set_progress(None)
             if pull_button.winfo_exists():
                 pull_button.configure(state="normal", text="Download offline models")
 
@@ -1687,6 +1851,7 @@ class DictationApp:
                         completed = obj.get("completed")
                         if total and completed:
                             msg = f"{status} {completed * 100 / total:.0f}%"
+                            self.root.after(0, set_progress, completed / total)
                         else:
                             msg = status
                         self.root.after(0, set_status, msg, COLOR_INFO)
@@ -1703,11 +1868,16 @@ class DictationApp:
 
         def ensure_serving(root_url):
             # Best-effort: binary present but daemon down -> launch it detached.
-            if reachable(root_url) or not shutil.which("ollama"):
+            # find_ollama_binary() covers the default Windows/macOS install
+            # locations that aren't on PATH yet right after a fresh install.
+            if reachable(root_url):
+                return
+            binary = find_ollama_binary()
+            if not binary:
                 return
             try:
                 subprocess.Popen(
-                    ["ollama", "serve"],
+                    [binary, "serve"],
                     stdout=subprocess.DEVNULL,
                     stderr=subprocess.DEVNULL,
                     stdin=subprocess.DEVNULL,
@@ -1750,26 +1920,32 @@ class DictationApp:
                 detail = (result.stderr or result.stdout or "").strip().replace("\n", " ")
                 self.root.after(0, finish_pull, f"Install failed: {detail[:80] or 'see logs'}", COLOR_ERROR)
                 return
-            # Linux installer starts the systemd service; Windows auto-starts.
-            self.root.after(0, set_status, "Starting Ollama...", COLOR_WARN)
-            ensure_serving(root_url)
-            if not wait_until_reachable(root_url):
-                self.root.after(0, finish_pull,
-                                "Ollama installed but not responding yet. Start it, then click again.",
-                                COLOR_ERROR)
-                return
-            do_pull(root_url, model)
+            # Linux installer starts the systemd service; Windows auto-starts,
+            # but the daemon/PATH can lag well past the installer exit -- poll
+            # patiently (and keep nudging `serve`) so the pull isn't skipped.
+            self.root.after(0, set_status, "Starting Ollama (first run can take a minute)...", COLOR_WARN)
+            for _ in range(6):
+                ensure_serving(root_url)
+                if wait_until_reachable(root_url, attempts=15, delay=1.0):
+                    do_pull(root_url, model)
+                    return
+            self.root.after(0, finish_pull,
+                            "Ollama installed but not responding yet. Start it, then click again.",
+                            COLOR_ERROR)
 
         def start_worker(root_url, model):
-            # Daemon installed but not reachable: bring it up, then pull.
+            # Daemon installed but not reachable: bring it up, then pull. The
+            # cold start (especially the Windows service) can take a while, so
+            # retry the launch+poll loop instead of giving up after one pass.
             self.root.after(0, set_status, "Starting Ollama...", COLOR_WARN)
-            ensure_serving(root_url)
-            if wait_until_reachable(root_url, attempts=10):
-                do_pull(root_url, model)
-            else:
-                self.root.after(0, finish_pull,
-                                "Ollama is installed but won't start. Start it manually, then click again.",
-                                COLOR_ERROR)
+            for _ in range(4):
+                ensure_serving(root_url)
+                if wait_until_reachable(root_url, attempts=15, delay=1.0):
+                    do_pull(root_url, model)
+                    return
+            self.root.after(0, finish_pull,
+                            "Ollama is installed but won't start. Start it manually, then click again.",
+                            COLOR_ERROR)
 
         def prompt_install(root_url, model):
             elevation = (
@@ -1799,7 +1975,7 @@ class DictationApp:
         def preflight_worker(root_url, model):
             if reachable(root_url):
                 state = "reachable"
-            elif shutil.which("ollama"):
+            elif find_ollama_binary():
                 state = "installed_stopped"
             else:
                 state = "missing"
@@ -1810,21 +1986,46 @@ class DictationApp:
             # The Ollama LLM pull only runs for the Ollama provider; a custom
             # OpenAI-compatible endpoint isn't necessarily Ollama, so we stop
             # after the speech model.
+            # faster-whisper downloads silently with no callback, so the UI used
+            # to freeze on a dead label for the whole ~1.5GB pull. We poll the HF
+            # cache dir size in a side thread to drive a real progress bar/MB
+            # readout while WhisperModel(...) blocks fetching the weights.
+            whisper_done = threading.Event()
+
+            def whisper_progress_watcher():
+                expected = WHISPER_MEDIUM_EXPECTED_BYTES
+                while not whisper_done.wait(0.5):
+                    got = dir_size_bytes(WHISPER_MEDIUM_CACHE_DIR)
+                    mb = got // (1024 * 1024)
+                    frac = min(got / expected, 0.99) if expected else 0.0
+                    self.root.after(
+                        0, set_status,
+                        f"Downloading speech model (Whisper medium)... {mb} MB", COLOR_INFO,
+                    )
+                    self.root.after(0, set_progress, frac)
+
             try:
                 # Only 'medium' is reachable in the UI (Dictate/Jira both resolve
                 # to the "normal" engine). 'small' (Fast) isn't exposed, so we skip
                 # ~480MB of dead weight.
                 self.root.after(0, set_status, "Downloading speech model (Whisper medium)...", COLOR_INFO)
-                WhisperModel(
-                    "medium",
-                    device="cpu",
-                    compute_type="int8",
-                    cpu_threads=CPU_THREADS,
-                    num_workers=1,
-                )
+                self.root.after(0, set_progress, 0.0)
+                watcher = threading.Thread(target=whisper_progress_watcher, daemon=True)
+                watcher.start()
+                try:
+                    WhisperModel(
+                        "medium",
+                        device="cpu",
+                        compute_type="int8",
+                        cpu_threads=CPU_THREADS,
+                        num_workers=1,
+                    )
+                finally:
+                    whisper_done.set()
             except Exception as exc:
                 self.root.after(0, finish_pull, f"Whisper download failed: {str(exc)[:80]}", COLOR_ERROR)
                 return
+            self.root.after(0, set_progress, 1.0)
             self.root.after(0, self.refresh_cache_status)
             if provider_key != "ollama":
                 # Custom endpoint: speech is local, the LLM lives on that server.

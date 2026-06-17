@@ -3,7 +3,7 @@
 ## Current Product Identity
 
 - Public product name: **SaySense**
-- Version line: **1.5.1 Beta**
+- Version line: **2.0**
 - Tagline: **You speak. It makes sense.**
 - Internal repository / historical codename: `saysense`
 - Legacy app kept for reference: `bananafone.py` / `README_V1.md`
@@ -27,9 +27,32 @@ history, defaults, and support notes. Public branding is SaySense; internal
 storage remains Bananafone/BananaPhone-compatible until a dedicated migration is
 implemented.
 
+## Release Checklist (DO THIS EVERY RELEASE — no exceptions)
+
+The app now self-updates by comparing `APP_VERSION` against the newest GitHub
+release tag (`saysense.py` -> `parse_version_key`). If `APP_VERSION` does not
+match the tag you push, the in-app update check is wrong by a version. So on
+**every** release, before tagging:
+
+1. **Bump `APP_VERSION` in `saysense.py` (line ~36) to match the tag.**
+   Tag `v2.0` => `APP_VERSION = "2.0"`. Tag `v2.1-beta.2` => `APP_VERSION = "2.1 Beta"`
+   (the parser normalizes "2.1 Beta" to the same key as "v2.1-beta", but the
+   beta sub-number only comes from the tag — so for `.N` betas, prefer setting
+   `APP_VERSION = "2.1 Beta.2"` to stay in lockstep).
+2. **Update `README.md`**: the `Status-<version>` badge AND the
+   "Latest release: **vX.Y**" line.
+3. **Update `docs/AI_HANDOFF.md`**: the `Version line:` field above.
+4. **Update `FUTURE_RELEASES.md`**: the "Status as of vX.Y" line and log what shipped.
+5. Commit, then `git tag vX.Y && git push origin main --tags`. The tag push is
+   what triggers the CI release build.
+
+These doc/version fields were historically left stale (README sat at 1.5.1
+while the app was on 1.9). Keep them in lockstep with `APP_VERSION`.
+
 ## Release Rules
 
-- Tags containing `beta`, such as `v1.5-beta.1`, publish prereleases.
+- Tags containing `beta`, such as `v1.5-beta.1`, publish prereleases. A tag with
+  no `beta` (e.g. `v2.0`) publishes a full (non-prerelease) release.
 - GitHub Actions builds:
   - Windows installer: `SaySense-Setup-<version>.exe`
   - Windows source zip: `SaySense-Source-<version>.zip`
