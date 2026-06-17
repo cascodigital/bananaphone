@@ -3,7 +3,7 @@
 ## Current Product Identity
 
 - Public product name: **SaySense**
-- Version line: **2.0**
+- Version line: **2.0.1**
 - Tagline: **You speak. It makes sense.**
 - Internal repository / historical codename: `saysense`
 - Legacy app kept for reference: `bananafone.py` / `README_V1.md`
