@@ -1,8 +1,21 @@
 # Future Releases
 
-Status as of v1.8.4-beta.
+Status as of v2.0.
 
 ## Done
+
+### Offline-models UX + self-update (v2.0) ✅
+- Real progress bar during the "Download offline models" flow: the Whisper
+  medium (~1.5GB) download now polls the HF cache and shows MB/%, instead of
+  freezing on a dead label. The Ollama pull also drives the same bar.
+- Robust Ollama bring-up: `find_ollama_binary()` locates the binary at the
+  default Windows/macOS install paths even when it isn't on PATH yet (fresh
+  install), and the start/install workers retry the serve+poll loop patiently
+  instead of giving up after one pass. Fixes the "stuck on Starting Ollama ->
+  404 model not found" race where the pull was silently skipped.
+- In-app self-update check against GitHub releases. Lists `/releases` (all the
+  beta tags are prereleases, so `/releases/latest` is useless) and prompts to
+  open the download page when a newer tag exists. Remembers the dismissed tag.
 
 ### Jira Profiles (v1.7) ✅
 - Structured, switchable profiles driving the built-in Jira prompt: tone,
