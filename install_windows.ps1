@@ -118,8 +118,10 @@ if ($WithOllama) {
         }
     }
     if (Get-Command ollama -ErrorAction SilentlyContinue) {
-        Write-Host "Pulling default local model qwen2.5:3b (~1.9 GB)..."
-        ollama pull qwen2.5:3b
+        # Must match the app default (PROVIDER_DEFAULT_MODEL in saysense.py) or
+        # the app 404s on a model that was never pulled.
+        Write-Host "Pulling default local model qwen2.5:7b (~4.7 GB)..."
+        ollama pull qwen2.5:7b
     }
 }
 

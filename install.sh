@@ -80,8 +80,11 @@ install_ollama() {
     curl -fsSL https://ollama.com/install.sh | sh
     ok "Ollama installed."
   fi
-  log "Pulling default local model qwen2.5:3b (~1.9 GB)..."
-  ollama pull qwen2.5:3b || log "Pull skipped/failed — you can do it later from the app's Settings."
+  # Must match the app's default Ollama model (PROVIDER_DEFAULT_MODEL in
+  # saysense.py); otherwise the app requests a model that was never pulled and
+  # the local endpoint returns 404 model-not-found.
+  log "Pulling default local model qwen2.5:7b (~4.7 GB)..."
+  ollama pull qwen2.5:7b || log "Pull skipped/failed — you can do it later from the app's Settings."
 }
 
 install_system_deps
