@@ -31,7 +31,7 @@ except Exception:
     pynput_keyboard = None
 
 APP_NAME = "SaySense"
-APP_VERSION = "1.8.4 Beta"
+APP_VERSION = "1.9 Beta"
 APP_TITLE = f"{APP_NAME} {APP_VERSION}"
 CPU_THREADS = min(os.cpu_count() or 4, 8)
 LOG_DIR = os.path.expanduser("~/.local/state/bananafone")
@@ -397,6 +397,10 @@ class DictationApp:
         self.refresh_privacy_status()
         if self.jira_mode:
             self.mode_key = self.jira_speech_mode()
+            self.mode = MODES[self.mode_key]
+        elif self.mode_key == "slow":
+            # Honor a local text provider on startup: offline means offline.
+            self.mode_key = self.dictate_speech_mode()
             self.mode = MODES[self.mode_key]
         self.select_mode(self.mode_key)
         self.poll_command_file()
@@ -844,7 +848,9 @@ class DictationApp:
         else:
             if self.jira_mode:
                 self.set_jira_mode(False, update_engine=False)
-            self.select_mode(choice)
+            # "Dictate" (slow) resolves to local Whisper when a local text
+            # provider is active, so offline stays offline.
+            self.select_mode(self.dictate_speech_mode() if choice == "slow" else choice)
 
     def on_input_selected(self, _choice=None):
         self.set_input_language(LANGUAGE_CHOICES.get(self.input_var.get(), "en"))
@@ -1190,6 +1196,13 @@ class DictationApp:
         # are firewalled.
         return "slow" if self.text_provider in CLOUD_TEXT_PROVIDERS else "normal"
 
+    def dictate_speech_mode(self):
+        # Dictate mirrors Jira: a local text provider (Ollama/custom) keeps the
+        # whole flow 100% offline with local Whisper; cloud text (OpenAI/Gemini)
+        # keeps the higher-fidelity cloud transcription. So selecting a local
+        # provider means "offline = truly offline", no silent cloud fallback.
+        return "slow" if self.text_provider in CLOUD_TEXT_PROVIDERS else "normal"
+
     def refresh_privacy_status(self):
         if not hasattr(self, "privacy_label"):
             return
@@ -1367,13 +1380,18 @@ class DictationApp:
 
         dialog = ctk.CTkToplevel(self.root)
         dialog.title("SaySense Settings")
-        dialog.geometry("520x800")
+        dialog.geometry("540x800")
         dialog.configure(fg_color=COLOR_WINDOW)
         dialog.transient(self.root)
         dialog.after(50, dialog.grab_set)
 
-        body = ctk.CTkFrame(dialog, fg_color="transparent")
-        body.pack(fill=tk.BOTH, expand=True, padx=22, pady=20)
+        # Footer is packed first at the bottom so Save/Cancel stay pinned while
+        # the content above scrolls. body is a scrollable frame for small screens.
+        footer = ctk.CTkFrame(dialog, fg_color="transparent")
+        footer.pack(side=tk.BOTTOM, fill=tk.X, padx=22, pady=(0, 16))
+
+        body = ctk.CTkScrollableFrame(dialog, fg_color="transparent")
+        body.pack(fill=tk.BOTH, expand=True, padx=22, pady=(20, 6))
 
         ctk.CTkLabel(
             body,
@@ -1582,11 +1600,13 @@ class DictationApp:
         local_model_hint = ctk.CTkLabel(
             body,
             text=(
-                "Ollama (local): pick the model above, then click Download local model. "
-                "If Ollama isn't installed, the app offers to install it for you (you approve "
-                "a system prompt), starts it, then downloads the model. No API key; the model "
-                "is freed from RAM after each call. Cloud is faster; local keeps audio and "
-                "tickets on this machine."
+                "Ollama (local): pick the model above, then click Download offline models. "
+                "This downloads BOTH the local Whisper speech models and the Ollama LLM, so the "
+                "whole flow runs with zero cloud calls. If Ollama isn't installed, the app offers "
+                "to install it for you (you approve a system prompt), starts it, then pulls the "
+                "model. No API key; the LLM is freed from RAM after each call. With a local "
+                "provider selected, Dictate and Jira both use local Whisper — offline is offline. "
+                "Ollama can run on this machine or a server (set the Server URL)."
             ),
             font=ctk.CTkFont(size=11),
             text_color=COLOR_SUBTLE,
@@ -1598,7 +1618,7 @@ class DictationApp:
         local_model_row = ctk.CTkFrame(body, fg_color="transparent")
         pull_button = ctk.CTkButton(
             local_model_row,
-            text="Download local model",
+            text="Download offline models",
             font=ctk.CTkFont(size=12, weight="bold"),
             height=32,
             corner_radius=10,
@@ -1638,7 +1658,7 @@ class DictationApp:
         def finish_pull(message, color):
             set_status(message, color)
             if pull_button.winfo_exists():
-                pull_button.configure(state="normal", text="Download local model")
+                pull_button.configure(state="normal", text="Download offline models")
 
         def do_pull(root_url, model):
             # Streams `ollama pull` over the local daemon API. No privilege needed.
@@ -1785,20 +1805,85 @@ class DictationApp:
                 state = "missing"
             self.root.after(0, after_preflight, state, root_url, model)
 
+        def download_offline_worker(root_url, model, provider_key):
+            # Whisper is the speech half and applies to any local provider.
+            # The Ollama LLM pull only runs for the Ollama provider; a custom
+            # OpenAI-compatible endpoint isn't necessarily Ollama, so we stop
+            # after the speech model.
+            try:
+                # Only 'medium' is reachable in the UI (Dictate/Jira both resolve
+                # to the "normal" engine). 'small' (Fast) isn't exposed, so we skip
+                # ~480MB of dead weight.
+                self.root.after(0, set_status, "Downloading speech model (Whisper medium)...", COLOR_INFO)
+                WhisperModel(
+                    "medium",
+                    device="cpu",
+                    compute_type="int8",
+                    cpu_threads=CPU_THREADS,
+                    num_workers=1,
+                )
+            except Exception as exc:
+                self.root.after(0, finish_pull, f"Whisper download failed: {str(exc)[:80]}", COLOR_ERROR)
+                return
+            self.root.after(0, self.refresh_cache_status)
+            if provider_key != "ollama":
+                # Custom endpoint: speech is local, the LLM lives on that server.
+                self.root.after(0, finish_pull, "Speech model ready (local Whisper).", COLOR_OK)
+                return
+            self.root.after(0, set_status, "Speech model ready. Checking Ollama...", COLOR_INFO)
+            preflight_worker(root_url, model)
+
         def start_pull():
+            provider_key = TEXT_PROVIDERS.get(provider_var.get(), "openai")
             model = model_var.get().strip()
-            if not model:
+            if provider_key == "ollama" and not model:
                 pull_status.configure(text="Set a model name first.", text_color=COLOR_WARN)
                 return
             root_url = ollama_root_from(baseurl_var.get())
             pull_button.configure(state="disabled", text="Working...")
-            pull_status.configure(text="Checking Ollama...", text_color=COLOR_WARN)
-            threading.Thread(target=preflight_worker, args=(root_url, model), daemon=True).start()
+            pull_status.configure(text="Downloading speech model...", text_color=COLOR_WARN)
+            threading.Thread(
+                target=download_offline_worker, args=(root_url, model, provider_key), daemon=True
+            ).start()
 
         pull_button.configure(command=start_pull)
 
+        PROVIDER_HINTS = {
+            "openai": (
+                "OpenAI (cloud): translation, Jira and Dictate transcription all run on OpenAI's "
+                "API. Needs the OpenAI API key above. Fastest and highest fidelity, but audio and "
+                "ticket text leave this machine."
+            ),
+            "gemini": (
+                "Gemini (cloud / Google): translation and Jira run on Google's Gemini, and Dictate "
+                "transcription also goes to Gemini. Needs the Gemini API key above. Audio and "
+                "ticket text leave this machine."
+            ),
+            "ollama": (
+                "Ollama (local): pick the model above, then click Download offline models. This "
+                "downloads BOTH the local Whisper speech model and the Ollama LLM, so the whole "
+                "flow runs with zero cloud calls. If Ollama isn't installed, the app offers to "
+                "install it for you (you approve a system prompt), starts it, then pulls the model. "
+                "No API key; the LLM is freed from RAM after each call. Dictate and Jira both use "
+                "local Whisper — offline is offline. Ollama can run on this machine or a server "
+                "(set the Server URL)."
+            ),
+            "custom": (
+                "Custom (OpenAI-compatible): point Model + Server URL at any OpenAI-compatible "
+                "endpoint (LM Studio, llama.cpp, a remote vLLM). Speech uses local Whisper, so "
+                "audio stays on this machine — click Download offline models to fetch the Whisper "
+                "model (the text LLM lives on your endpoint). A cloud endpoint may still need an "
+                "API key for the text model."
+            ),
+        }
+
         def update_local_row(provider_key):
-            if provider_key == "ollama":
+            local_model_hint.configure(
+                text=PROVIDER_HINTS.get(provider_key, PROVIDER_HINTS["openai"])
+            )
+            # Local providers keep speech on-device, so the Whisper download is
+            # relevant; for Ollama it also pulls the LLM, for custom it's Whisper only.
+            if provider_key in ("ollama", "custom"):
                 local_model_row.pack(anchor="w", pady=(0, 16), before=local_model_hint)
             else:
                 local_model_row.pack_forget()
@@ -1839,8 +1924,8 @@ class DictationApp:
         )
         self.jira_instructions_status_label.pack(side=tk.LEFT, padx=(10, 0))
 
-        buttons = ctk.CTkFrame(body, fg_color="transparent")
-        buttons.pack(side=tk.BOTTOM, anchor="e")
+        buttons = ctk.CTkFrame(footer, fg_color="transparent")
+        buttons.pack(side=tk.RIGHT)
 
         def save_settings():
             self.silence_timeout_setting = silence_var.get()
@@ -1860,6 +1945,13 @@ class DictationApp:
             self.set_hold_button_idle()
             self.update_status("Settings saved.", COLOR_OK)
             dialog.destroy()
+            # If the text provider changed local<->cloud, re-resolve Dictate so
+            # the speech path matches (local Whisper offline vs cloud STT).
+            if not self.jira_mode and self.mode_key in ("slow", "normal"):
+                target = self.dictate_speech_mode()
+                if target != self.mode_key:
+                    self.select_mode(target)
+                    return
             if self.mode.get("backend") == "api" and self.model is None:
                 self.ensure_model_loaded_async(self.mode_key)
 
