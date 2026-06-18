@@ -57,6 +57,34 @@ SaySense collapses that loop into one hotkey. Talk in your language; polished te
 
 ---
 
+## Jira Mode, end to end
+
+You work the call in your own language and let SaySense do the paperwork. Here's a real-shaped ticket — three rough notes dictated **in Portuguese** while troubleshooting, then the one-click output.
+
+**What you dictate (captured live, messy, out of order):**
+
+> *"a usuária Marina do financeiro abriu chamado, o Teams não carrega, fica na tela de carregando infinito, ela tá no notebook novo"*
+>
+> *"testei limpar o cache em AppData Microsoft Teams, não resolveu, aí removi a pasta do Teams new também e nada"*
+>
+> *"no fim era credencial em cache, fui no Gerenciador de Credenciais do Windows e apaguei as entradas do MicrosoftOffice16, reiniciei o Teams, pediu login de novo e entrou normal, deixei pra ela confirmar amanhã"*
+
+**What lands on your clipboard — Customer Comment (public):**
+
+> Hi Marina, we've identified and resolved the issue with Teams not loading on your new notebook. The problem was related to cached credentials. After clearing these, Teams prompted for a login again and is now functioning normally. Please confirm tomorrow if everything is working as expected.
+
+**Internal Note (support team only):**
+
+> Issue: Teams stuck on loading screen on new notebook for user Marina from finance.
+> Investigation: Cleared cache in `AppData\Microsoft\Teams` and removed Teams new folder without success.
+> Actions: Deleted `MicrosoftOffice16` entries in Windows Credential Manager, restarted Teams, and prompted for login.
+> Result: Teams is now loading normally after login. Awaiting user confirmation.
+> Follow-up: None.
+
+Same notes, switch the **profile** to *MSP client* or *Internal helpdesk* and the tone of both fields shifts; hit **Regenerate → shorter / more technical / add follow-up** to reshape it without re-dictating a word. It reconstructs the ticket from out-of-order notes, keeps your technical identifiers (the paths, `MicrosoftOffice16`), and never claims a resolution you didn't dictate.
+
+---
+
 ## 🔒 Privacy is a setting, not a promise
 
 Most dictation tools ship your microphone to someone else's server. SaySense lets you decide, per provider — and the main window shows you the truth in real time:
