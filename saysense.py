@@ -134,7 +134,7 @@ OPENAI_CHAT_URL = os.environ.get(
 )
 OPENAI_KEY_FILE = os.environ.get(
     "BANANAFONE_OPENAI_KEY_FILE",
-    "/home/aristofeles/ai/config/ai-keys.md",
+    os.path.expanduser("~/ai/config/ai-keys.md"),
 )
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 OPENAI_KEY_FILES = [
