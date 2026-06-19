@@ -33,7 +33,7 @@ except Exception:
     pynput_keyboard = None
 
 APP_NAME = "SaySense"
-APP_VERSION = "2.0.1"
+APP_VERSION = "2.1.0"
 APP_TITLE = f"{APP_NAME} {APP_VERSION}"
 
 # --- Self-update (GitHub Releases) -----------------------------------------
@@ -207,6 +207,112 @@ JIRA_LENGTH_PROMPT = {
     "Standard": "Length: standard. customer_comment 2-4 sentences; internal_note concise but complete.",
     "Detailed": "Length: thorough. customer_comment 3-5 sentences; internal_note detailed under each section.",
 }
+# Small local models (qwen2.5:7b et al.) follow a concrete example far better
+# than dense prose rules. This one example is injected ONLY for local text
+# providers and deliberately anchors the four rules they break most often:
+# one section per line, follow-up preserved (not "None"), no jargon in the
+# public field, and identifiers/paths kept verbatim. See memory
+# "saysense-ollama-jira-qualidade".
+# No ticket number / personal name on purpose: small models parrot literal
+# values from the example into unrelated tickets. The file path and the
+# MicrosoftOffice16 token already teach "preserve identifiers verbatim".
+LOCAL_JIRA_FEWSHOT_INPUT = (
+    "user says teams keeps asking for the password every morning. i cleared the teams "
+    "cache folder under AppData\\Microsoft\\Teams and removed the cached credentials in "
+    "MicrosoftOffice16 from credential manager. told them to confirm tomorrow if it stops"
+)
+LOCAL_JIRA_FEWSHOT_OUTPUT = json.dumps(
+    {
+        "customer_comment": (
+            "Hi, thanks for flagging the repeated sign-in prompts. I've cleared the saved "
+            "data and refreshed the stored sign-in details on your machine. Please restart "
+            "the app and let me know tomorrow whether it still asks for your password, so "
+            "we can confirm it's fully resolved."
+        ),
+        "internal_note": (
+            "Issue: Teams prompts for password every morning.\n"
+            "Investigation: Suspected stale Teams cache and cached credentials.\n"
+            "Actions: Cleared cache folder AppData\\Microsoft\\Teams; removed cached "
+            "credentials under MicrosoftOffice16 in Windows Credential Manager.\n"
+            "Result: Workaround applied; awaiting confirmation.\n"
+            "Follow-up: User to confirm tomorrow that the prompts stopped."
+        ),
+    },
+    ensure_ascii=False,
+    indent=2,
+)
+
+# Appended to the Jira system prompt for local models only. Forcing an explicit
+# resolution classification before the prose makes a 7B commit to "did it work?"
+# instead of contradicting the notes in the Result line. The key is discarded.
+LOCAL_JIRA_RESOLUTION_HINT = (
+    "\n\n=== RESOLUTION STATE ===\n"
+    "Add a third JSON key 'resolution_state' with EXACTLY one of: \"resolved\", "
+    "\"workaround\", \"open\". Decide it ONLY from the notes: if the dictation says it "
+    "started working / entered normally, it is \"resolved\" (even if awaiting user "
+    "confirmation). The Result section MUST agree with resolution_state — never say the "
+    "issue persists when the state is resolved or workaround."
+)
+
+# Local (Ollama) quality tiers. Presented as named choices in Settings so a
+# distributed user never has to know a model tag. Same model family across tiers
+# so the few-shot + resolution_state calibration behaves consistently.
+LOCAL_MODEL_TIERS = [
+    {
+        "id": "balanced",
+        "label": "7B — Balanced (recommended)",
+        "model": "qwen2.5:7b",
+        "size": "~4.7 GB download",
+        "note": "Runs anywhere, even CPU-only. Solid drafts — glance at the Result line "
+                "before sending one to a customer.",
+    },
+    {
+        "id": "quality",
+        "label": "14B — Best quality (needs GPU)",
+        "model": "qwen2.5:14b",
+        "size": "~9 GB download",
+        "note": "Better coherence and phrasing. Needs a 12 GB+ GPU to be practical; on a "
+                "CPU it can take several minutes per ticket.",
+    },
+    {
+        "id": "custom",
+        "label": "Custom model…",
+        "model": None,
+        "size": "",
+        "note": "Type any Ollama tag below (advanced — LM Studio, llama.cpp, remote vLLM).",
+    },
+]
+LOCAL_MODEL_TIERS_BY_ID = {t["id"]: t for t in LOCAL_MODEL_TIERS}
+LOCAL_MODEL_TIER_BY_LABEL = {t["label"]: t for t in LOCAL_MODEL_TIERS}
+DEFAULT_LOCAL_MODEL_TIER = "balanced"
+
+
+def detect_local_gpu():
+    """Best-effort NVIDIA/AMD probe on THIS machine (Mac intentionally unsupported).
+
+    Only meaningful when Ollama runs locally; for a remote server we can't see
+    its hardware, so callers gate this on a local base URL.
+    """
+    if shutil.which("nvidia-smi"):
+        try:
+            out = subprocess.run(["nvidia-smi", "-L"], capture_output=True, text=True, timeout=4)
+            if out.returncode == 0 and "GPU" in out.stdout:
+                first = out.stdout.strip().splitlines()[0]
+                # "GPU 0: NVIDIA GeForce RTX 4070 (UUID: ...)" -> keep the model name
+                name = first.split(":", 1)[-1].split("(")[0].strip()
+                return True, name[:48] or "NVIDIA GPU"
+        except Exception:
+            pass
+    if shutil.which("rocm-smi") or shutil.which("rocminfo"):
+        return True, "AMD ROCm GPU"
+    return False, ""
+
+
+def base_url_is_local(base_url):
+    host = (base_url or "").split("//")[-1].split("/")[0].split(":")[0].lower()
+    return host in ("", "localhost", "127.0.0.1", "0.0.0.0", "::1")
+
+
 DEFAULT_PROFILE_ID = "default"
 BUILTIN_JIRA_PROFILES = [
     {
@@ -406,6 +512,7 @@ class DictationApp:
         self.default_input_language = self.settings.get("default_input_language", "en")
         self.default_output_target = self.settings.get("default_output", "en")
         self.default_jira_mode = self.settings.get("default_jira_mode", False)
+        self.jira_auto_generate = self.settings.get("jira_auto_generate", False)
         self.silence_timeout_setting = self.settings.get("silence_timeout", DEFAULT_SILENCE_TIMEOUT)
         self.configured_api_key = self.settings.get("api_key", "")
         self.configured_gemini_key = self.settings.get("gemini_api_key", "")
@@ -416,6 +523,12 @@ class DictationApp:
         self.text_base_url = self.settings.get("text_base_url", "") or PROVIDER_DEFAULT_BASE_URL.get(
             self.text_provider, DEFAULT_OPENAI_BASE_URL
         )
+        self.local_model_tier = self.settings.get("local_model_tier", DEFAULT_LOCAL_MODEL_TIER)
+        if self.local_model_tier not in LOCAL_MODEL_TIERS_BY_ID:
+            self.local_model_tier = DEFAULT_LOCAL_MODEL_TIER
+        # For Ollama on a preset tier, the tier owns the model tag.
+        if self.text_provider == "ollama" and self.local_model_tier != "custom":
+            self.text_model = LOCAL_MODEL_TIERS_BY_ID[self.local_model_tier]["model"]
         self.jira_extra_instructions = self.settings.get("jira_extra_instructions", "")
         self.jira_prompt_mode = self.settings.get("jira_prompt_mode", JIRA_PROMPT_MODE_BUILTIN_EXTRA)
         self.jira_custom_prompt = self.settings.get("jira_custom_prompt", "")
@@ -1358,6 +1471,7 @@ class DictationApp:
         default_input_language = settings.get("default_input_language", "en")
         default_output = settings.get("default_output", "en")
         default_jira_mode = bool(settings.get("default_jira_mode", False))
+        jira_auto_generate = bool(settings.get("jira_auto_generate", False))
         if default_output == "jira":
             default_output = "en"
             default_jira_mode = True
@@ -1382,6 +1496,9 @@ class DictationApp:
             silence_timeout = DEFAULT_SILENCE_TIMEOUT
         text_model = str(settings.get("text_model", "")).strip()
         text_base_url = str(settings.get("text_base_url", "")).strip()
+        local_model_tier = str(settings.get("local_model_tier", DEFAULT_LOCAL_MODEL_TIER)).strip()
+        if local_model_tier not in LOCAL_MODEL_TIERS_BY_ID:
+            local_model_tier = DEFAULT_LOCAL_MODEL_TIER
         jira_extra_instructions = str(settings.get("jira_extra_instructions", "")).strip()
         jira_prompt_mode = str(settings.get("jira_prompt_mode", JIRA_PROMPT_MODE_BUILTIN_EXTRA)).strip()
         if jira_prompt_mode not in JIRA_PROMPT_MODES:
@@ -1396,12 +1513,14 @@ class DictationApp:
             "default_input_language": default_input_language,
             "default_output": default_output,
             "default_jira_mode": default_jira_mode,
+            "jira_auto_generate": jira_auto_generate,
             "silence_timeout": silence_timeout,
             "api_key": settings.get("api_key", "").strip(),
             "gemini_api_key": str(settings.get("gemini_api_key", "")).strip(),
             "text_provider": text_provider,
             "text_model": text_model,
             "text_base_url": text_base_url,
+            "local_model_tier": local_model_tier,
             "jira_extra_instructions": jira_extra_instructions,
             "jira_prompt_mode": jira_prompt_mode,
             "jira_custom_prompt": jira_custom_prompt,
@@ -1417,12 +1536,14 @@ class DictationApp:
             "default_input_language": self.default_input_language,
             "default_output": self.default_output_target,
             "default_jira_mode": self.default_jira_mode,
+            "jira_auto_generate": self.jira_auto_generate,
             "silence_timeout": self.silence_timeout_setting,
             "api_key": self.configured_api_key,
             "gemini_api_key": self.configured_gemini_key,
             "text_provider": self.text_provider,
             "text_model": self.text_model,
             "text_base_url": self.text_base_url,
+            "local_model_tier": self.local_model_tier,
             "jira_extra_instructions": self.jira_extra_instructions,
             "jira_prompt_mode": self.jira_prompt_mode,
             "jira_custom_prompt": self.jira_custom_prompt,
@@ -1634,11 +1755,39 @@ class DictationApp:
         )
         provider_menu.pack(fill=tk.X, pady=(6, 8))
 
+        # Local quality tier (Ollama only): named presets so a distributed user
+        # never types a model tag. GPU is probed once for an honest recommendation.
+        tier_var = tk.StringVar(
+            value=LOCAL_MODEL_TIERS_BY_ID[self.local_model_tier]["label"]
+        )
+        gpu_present, gpu_name = (
+            detect_local_gpu() if base_url_is_local(self.text_base_url) else (False, "")
+        )
+        tier_menu = ctk.CTkOptionMenu(
+            body,
+            variable=tier_var,
+            values=[t["label"] for t in LOCAL_MODEL_TIERS],
+            font=ctk.CTkFont(size=12),
+            fg_color=COLOR_FIELD,
+            button_color=BTN_PRIMARY,
+            button_hover_color=BTN_PRIMARY_HOVER,
+            corner_radius=8,
+            dropdown_fg_color=COLOR_CARD,
+            dropdown_hover_color=BTN_PRIMARY,
+        )
+        tier_hint = ctk.CTkLabel(
+            body, text="", font=ctk.CTkFont(size=11), text_color=COLOR_MUTED,
+            wraplength=430, justify="left", anchor="w",
+        )
+
+        # Free-text Model field — for cloud providers, a custom endpoint, or the
+        # "Custom model…" tier. Hidden when a preset tier owns the model tag.
+        model_row = ctk.CTkFrame(body, fg_color="transparent")
         ctk.CTkLabel(
-            body, text="Model", font=ctk.CTkFont(size=11), text_color=COLOR_MUTED
+            model_row, text="Model", font=ctk.CTkFont(size=11), text_color=COLOR_MUTED
         ).pack(anchor="w")
         model_entry = ctk.CTkEntry(
-            body,
+            model_row,
             textvariable=model_var,
             font=ctk.CTkFont(size=12),
             fg_color=COLOR_FIELD,
@@ -1647,9 +1796,11 @@ class DictationApp:
         )
         model_entry.pack(fill=tk.X, pady=(2, 6))
 
-        ctk.CTkLabel(
+        # Placement (and visibility) for server_label/baseurl_entry is owned by
+        # update_model_widgets — hidden for local preset tiers (localhost implied).
+        server_label = ctk.CTkLabel(
             body, text="Server URL", font=ctk.CTkFont(size=11), text_color=COLOR_MUTED
-        ).pack(anchor="w")
+        )
         baseurl_entry = ctk.CTkEntry(
             body,
             textvariable=baseurl_var,
@@ -1658,7 +1809,50 @@ class DictationApp:
             border_color=COLOR_CARD_BORDER,
             corner_radius=8,
         )
-        baseurl_entry.pack(fill=tk.X, pady=(2, 6))
+
+        def refresh_tier_hint():
+            tier = LOCAL_MODEL_TIER_BY_LABEL.get(tier_var.get(), LOCAL_MODEL_TIERS[0])
+            text = f"{tier['size']} · {tier['note']}" if tier["size"] else tier["note"]
+            # GPU note only matters for the 14B tier — 7B runs anywhere.
+            if tier["id"] == "quality":
+                if base_url_is_local(baseurl_var.get()):
+                    if gpu_present:
+                        text += f"\nGPU detected ({gpu_name}) — this runs fast."
+                    else:
+                        text += ("\nNo GPU detected — this will be very slow on CPU; "
+                                 "the 7B tier is recommended instead.")
+                else:
+                    text += "\nRemote server — make sure it has a GPU for this tier."
+            tier_hint.configure(text=text)
+
+        def update_model_widgets(provider_key):
+            for w in (tier_menu, tier_hint, model_row, server_label, baseurl_entry):
+                w.pack_forget()
+            show_server = True
+            if provider_key == "ollama":
+                tier_menu.pack(fill=tk.X, pady=(0, 2), before=test_row)
+                tier_hint.pack(fill=tk.X, pady=(0, 8), before=test_row)
+                tier = LOCAL_MODEL_TIER_BY_LABEL.get(tier_var.get(), LOCAL_MODEL_TIERS[0])
+                if tier["id"] == "custom":
+                    model_row.pack(fill=tk.X, before=test_row)
+                else:
+                    # localhost is implied for a preset local tier — no boilerplate.
+                    show_server = not base_url_is_local(baseurl_var.get())
+                refresh_tier_hint()
+            else:
+                # Cloud / custom endpoint: plain model field, no tier.
+                model_row.pack(fill=tk.X, before=test_row)
+            if show_server:
+                server_label.pack(anchor="w", before=test_row)
+                baseurl_entry.pack(fill=tk.X, pady=(2, 6), before=test_row)
+
+        def on_tier_change(label):
+            tier = LOCAL_MODEL_TIER_BY_LABEL.get(label, LOCAL_MODEL_TIERS[0])
+            if tier["model"]:
+                model_var.set(tier["model"])
+            update_model_widgets("ollama")
+
+        tier_menu.configure(command=on_tier_change)
 
         # --- Test connection (uses the dialog's current, unsaved values) -----
         test_row = ctk.CTkFrame(body, fg_color="transparent")
@@ -2091,12 +2285,19 @@ class DictationApp:
 
         def on_provider_change(label):
             key = TEXT_PROVIDERS.get(label, "openai")
-            model_var.set(PROVIDER_DEFAULT_MODEL.get(key, DEFAULT_OPENAI_TEXT_MODEL))
             baseurl_var.set(PROVIDER_DEFAULT_BASE_URL.get(key, DEFAULT_OPENAI_BASE_URL))
+            if key == "ollama":
+                # Tier owns the model tag (unless the Custom tier is selected).
+                tier = LOCAL_MODEL_TIER_BY_LABEL.get(tier_var.get(), LOCAL_MODEL_TIERS[0])
+                model_var.set(tier["model"] or model_var.get())
+            else:
+                model_var.set(PROVIDER_DEFAULT_MODEL.get(key, DEFAULT_OPENAI_TEXT_MODEL))
             update_local_row(key)
+            update_model_widgets(key)
 
         provider_menu.configure(command=on_provider_change)
         update_local_row(self.text_provider)
+        update_model_widgets(self.text_provider)
 
         ctk.CTkLabel(
             body,
@@ -2125,17 +2326,35 @@ class DictationApp:
         )
         self.jira_instructions_status_label.pack(side=tk.LEFT, padx=(10, 0))
 
+        auto_generate_var = tk.BooleanVar(value=self.jira_auto_generate)
+        auto_generate_row = ctk.CTkFrame(body, fg_color="transparent")
+        auto_generate_row.pack(fill=tk.X, pady=(0, 16))
+        ctk.CTkCheckBox(
+            auto_generate_row,
+            text="Auto-generate after each dictation (no Generate Jira click)",
+            font=ctk.CTkFont(size=12),
+            variable=auto_generate_var,
+        ).pack(side=tk.LEFT)
+
         buttons = ctk.CTkFrame(footer, fg_color="transparent")
         buttons.pack(side=tk.RIGHT)
 
         def save_settings():
             self.silence_timeout_setting = silence_var.get()
+            self.jira_auto_generate = auto_generate_var.get()
             self.configured_api_key = key_var.get().strip()
             self.configured_gemini_key = gemini_key_var.get().strip()
             self.text_provider = TEXT_PROVIDERS.get(provider_var.get(), "openai")
-            self.text_model = model_var.get().strip() or PROVIDER_DEFAULT_MODEL.get(
-                self.text_provider, DEFAULT_OPENAI_TEXT_MODEL
-            )
+            self.local_model_tier = LOCAL_MODEL_TIER_BY_LABEL.get(
+                tier_var.get(), LOCAL_MODEL_TIERS[0]
+            )["id"]
+            if self.text_provider == "ollama" and self.local_model_tier != "custom":
+                # Preset tier owns the model tag.
+                self.text_model = LOCAL_MODEL_TIERS_BY_ID[self.local_model_tier]["model"]
+            else:
+                self.text_model = model_var.get().strip() or PROVIDER_DEFAULT_MODEL.get(
+                    self.text_provider, DEFAULT_OPENAI_TEXT_MODEL
+                )
             self.text_base_url = baseurl_var.get().strip() or PROVIDER_DEFAULT_BASE_URL.get(
                 self.text_provider, DEFAULT_OPENAI_BASE_URL
             )
@@ -2800,9 +3019,11 @@ class DictationApp:
     def after_transcription_success(self, text, elapsed, language_probability):
         confidence = f"{language_probability:.2f}" if language_probability is not None else "n/a"
         source_label = self.source_language().upper()
+        auto_generate = False
         if isinstance(text, dict) and "raw_note" in text:
             self.add_jira_note(text.get("raw_note", ""))
             copied_label = "Note polished & copied"
+            auto_generate = self.jira_auto_generate and bool(self.jira_raw_notes)
         elif isinstance(text, dict):
             self.set_jira_text(text.get("customer_comment", ""), text.get("internal_note", ""))
             copied_label = "Customer Comment copied"
@@ -2816,6 +3037,8 @@ class DictationApp:
             COLOR_OK,
         )
         self.hide_if_hotkey_recording()
+        if auto_generate:
+            self.generate_jira_from_notes()
 
     def after_transcription_error(self, error_text):
         self.set_mode_button_states()
@@ -3267,13 +3490,20 @@ class DictationApp:
             "- Full technical picture for a peer engineer. Direct, matter-of-fact, no softening.\n"
             "- Structure it under these labels, each on its own line, omitting any with no real content:\n"
             f"{section_lines}\n\n"
-            "=== HARD RULES ===\n"
-            "- NEVER invent facts, numbers, names, error codes, or outcomes not present in the dictation. "
-            "Preserve every identifier (names, times, IPs, ticket IDs, error codes) verbatim.\n"
-            "- If the dictation does not describe a completed resolution, do NOT pretend the ticket is "
-            "closed: write the closing section as a progress update and reflect that in the customer_comment.\n"
-            "- If the dictation is too thin to fill a section, leave it out rather than padding it.\n"
-            f"- Both fields must be written in fluent, native-level {language_name}.\n"
+            "=== HARD RULES (follow every one) ===\n"
+            "1. Preserve every identifier verbatim: names, times, IPs, hostnames, ticket/asset "
+            "IDs, error codes, file paths and command names. Never paraphrase or drop them.\n"
+            "2. Never invent facts, numbers, names, error codes, or outcomes not in the dictation.\n"
+            "3. In internal_note, put EACH section label on its own line. Never run two sections "
+            "together on the same line.\n"
+            "4. If the dictation does not describe a completed fix, do NOT mark it resolved: write "
+            "the closing section as a progress update and reflect that in customer_comment.\n"
+            "5. Follow-up: if the dictation mentions anything to check, confirm, or do next, capture "
+            "it there. Only write 'None' when there is genuinely nothing pending.\n"
+            "6. customer_comment is PUBLIC: no jargon, no tool names, no commands, no file paths, "
+            "no internal blame.\n"
+            "7. If a section has no real content, omit it rather than padding it.\n"
+            f"8. Write both fields in fluent, native-level {language_name}.\n"
         )
         extra = (profile.get("extra") or "").strip()
         if extra:
@@ -3292,14 +3522,87 @@ class DictationApp:
             profile["extra"] = (profile.get("extra", "") + "\n" + style_instruction).strip()
 
         system_prompt = self.build_jira_system_prompt(source_name, language_name, profile=profile)
+        sections = profile.get("sections") or list(DEFAULT_JIRA_SECTIONS)
+        is_local = self.text_provider not in CLOUD_TEXT_PROVIDERS
 
-        content = self.run_text_chat(
-            [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": text},
-            ],
-            json_mode=True,
+        if is_local:
+            # Small models misjudge resolved-vs-open and then write a Result that
+            # contradicts the notes. Forcing an explicit classification first
+            # (the value itself is discarded) makes them commit before writing.
+            system_prompt += LOCAL_JIRA_RESOLUTION_HINT
+
+        messages = [{"role": "system", "content": system_prompt}]
+        if is_local:
+            # Anchor format/rules with one worked example for small local models.
+            messages.append({"role": "user", "content": LOCAL_JIRA_FEWSHOT_INPUT})
+            messages.append({"role": "assistant", "content": LOCAL_JIRA_FEWSHOT_OUTPUT})
+            # Small models parrot the example's literal values (ticket IDs, names).
+            # Pin it as format-only so they don't bleed INC0048213 / paths in.
+            messages.append({
+                "role": "system",
+                "content": (
+                    "The example above is ONLY a format and formatting guide. Never reuse "
+                    "any of its specific values (ticket numbers, names, paths, dates) in "
+                    "your answer. Use exclusively the facts from the user's notes below."
+                ),
+            })
+        messages.append({"role": "user", "content": text})
+
+        # Local LLMs on CPU need real headroom (a 7B can take minutes); cloud is fast.
+        timeout = 300 if is_local else 120
+        result = self.run_jira_chat(messages, sections, timeout=timeout)
+
+        # Deterministic safety net: small models still drop a backbone section or
+        # collapse Follow-up to "None". Repair once before accepting the output.
+        if is_local:
+            warnings = self.jira_structure_warnings(result["internal_note"], sections)
+            if warnings:
+                result = self.repair_jira_output(messages, result, sections, warnings, timeout)
+            # Small models leak internal jargon into the public field when asked to
+            # produce both at once. Re-derive customer_comment as a separate,
+            # narrowly-scoped jargon-strip rewrite — a task a 7B does cleanly.
+            try:
+                refined = self.refine_customer_comment_local(
+                    result["internal_note"], language_name, timeout
+                )
+                if refined:
+                    result["customer_comment"] = refined
+            except Exception:
+                # Best-effort: keep the first-pass comment if the rewrite fails.
+                self.log_exception("refine_customer_comment_local failed")
+        return result
+
+    def refine_customer_comment_local(self, internal_note, language_name, timeout):
+        system = (
+            f"You write a short reply to a NON-TECHNICAL end user, in {language_name}. "
+            "Rewrite the internal support note below into a brief, friendly status update "
+            "the user can understand.\n"
+            "STRICT RULES:\n"
+            f"1. Write ONLY in {language_name}.\n"
+            "2. NO tool names, NO file paths, NO folder names, NO command names, NO ticket IDs.\n"
+            "3. NO technical jargon (cache, credentials, credential manager, registry, config, "
+            "server, AppData, etc.). Use plain words like 'saved data', 'sign-in details', "
+            "'settings'.\n"
+            "4. Address the user directly, 2-4 sentences, empathetic and not robotic.\n"
+            "5. Do not invent facts. If the note is awaiting confirmation, keep that.\n"
+            "6. No filler opener like 'I hope this finds you well'.\n"
+            "Output ONLY the message text — no labels, no JSON, no surrounding quotes."
         )
+        text = self.run_text_chat(
+            [
+                {"role": "system", "content": system},
+                {"role": "user", "content": internal_note},
+            ],
+            json_mode=False,
+            timeout=timeout,
+        ).strip()
+        # Strip accidental wrapping quotes some models add.
+        if len(text) >= 2 and text[0] in "\"'" and text[-1] == text[0]:
+            text = text[1:-1].strip()
+        return text
+
+    def run_jira_chat(self, messages, sections, timeout=90):
+        content = self.run_text_chat(messages, json_mode=True, timeout=timeout)
         try:
             parsed = json.loads(content)
         except json.JSONDecodeError:
@@ -3307,11 +3610,63 @@ class DictationApp:
 
         result = {
             "customer_comment": str(parsed.get("customer_comment", "")).strip(),
-            "internal_note": str(parsed.get("internal_note", "")).strip(),
+            "internal_note": self.normalize_jira_sections(
+                str(parsed.get("internal_note", "")).strip(), sections
+            ),
         }
         if not result["customer_comment"] or not result["internal_note"]:
             raise RuntimeError("JIRA output missing customer_comment or internal_note")
         return result
+
+    def normalize_jira_sections(self, internal_note, sections):
+        """Force each known section label onto its own line.
+
+        qwen2.5:7b often jams the whole internal note inline ("Issue: ...
+        Investigation: ..."). This is a deterministic fix independent of how
+        well the model followed the prompt: collapse any whitespace before a
+        recognised "Label:" into a single newline.
+        """
+        if not internal_note:
+            return internal_note
+        labels = [s for s in sections if s]
+        if not labels:
+            return internal_note
+        pattern = re.compile(
+            r"\s*\b(" + "|".join(re.escape(label) for label in labels) + r")\s*:"
+        )
+        normalized = pattern.sub(lambda m: f"\n{m.group(1)}:", internal_note)
+        return normalized.strip()
+
+    def jira_structure_warnings(self, internal_note, sections):
+        """Structural defects worth a single repair pass (local models only)."""
+        warnings = []
+        lines = internal_note.splitlines()
+        for label in ("Issue", "Result"):
+            if label in sections and not any(
+                re.match(rf"\s*{re.escape(label)}\s*:", line) for line in lines
+            ):
+                warnings.append(f"missing {label} section")
+        return warnings
+
+    def repair_jira_output(self, base_messages, result, sections, warnings, timeout=90):
+        fix_request = (
+            "Your previous JSON broke these rules: "
+            + "; ".join(warnings)
+            + ". Return corrected STRICT JSON with the same two keys (customer_comment, "
+            "internal_note). Put each section label on its own line, keep every required "
+            f"section ({', '.join(sections)}), preserve all identifiers and file paths "
+            "verbatim, and keep jargon, tool names, commands and paths out of customer_comment."
+        )
+        messages = base_messages + [
+            {"role": "assistant", "content": json.dumps(result, ensure_ascii=False)},
+            {"role": "user", "content": fix_request},
+        ]
+        try:
+            return self.run_jira_chat(messages, sections, timeout=timeout)
+        except Exception:
+            # Repair is best-effort: keep the first pass rather than failing.
+            self.log_exception("repair_jira_output failed")
+            return result
 
     def extract_json_object(self, text):
         start = text.find("{")
