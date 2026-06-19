@@ -95,6 +95,12 @@ Pick the **Ollama + local Whisper** path and *nothing* leaves the machine: audio
 
 ---
 
+## ✨ New in 2.1
+
+- **Local Jira that's actually usable** — the offline path now matches the cloud output far more closely: section structure is enforced deterministically, technical identifiers (paths, IDs) are kept verbatim, and the public Customer Comment is re-derived in a dedicated jargon-stripping pass so internal tooling never leaks to the end user. A small local model finally produces a clean, coherent ticket.
+- **Pick your local quality** — choose **7B (Balanced)** to run anywhere (even CPU-only) or **14B (Best quality)** for sharper output on a GPU. The picker shows the download size and detects whether this machine has a GPU, so the recommendation is honest — no model tags to memorize.
+- **One-shot Jira** — optional *Auto-generate after each dictation*: speak your note once and the ticket is generated automatically, no extra click.
+
 ## ✨ New in 2.0
 
 - **Real download progress** — the offline-model download (Whisper + Ollama) now shows live MB/% instead of freezing on a blank screen.

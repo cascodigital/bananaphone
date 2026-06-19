@@ -1,8 +1,37 @@
 # Future Releases
 
-Status as of v2.0.1.
+Status as of v2.1.0.
 
 ## Done
+
+### Local Jira quality + model tiers + one-shot (v2.1.0) ✅
+- **Robust local Jira pipeline.** Small local models (qwen2.5:7b) used to break the
+  Jira output four ways: sections jammed onto one line, dropped/`None` follow-ups,
+  internal jargon leaking into the public Customer Comment, and genericized
+  identifiers. All addressed without changing models:
+  - A one-shot few-shot example (local providers only) anchors format and verbatim
+    identifier preservation. No ticket number/name in the example so the model can't
+    parrot it into unrelated tickets.
+  - `normalize_jira_sections()` deterministically forces each section label onto its
+    own line, independent of how well the model followed the prompt.
+  - A forced (then discarded) `resolution_state` key makes the model commit to
+    resolved/workaround/open before writing the Result, fixing the "issue persists"
+    contradiction.
+  - The public Customer Comment is re-derived in a separate, narrowly-scoped
+    jargon-strip pass (`refine_customer_comment_local`) — a task a 7B does cleanly —
+    instead of being produced in the same breath as the technical note.
+  - HARD RULES rewritten as short numbered imperatives (small models follow lists
+    better than dense prose). A one-shot repair pass re-asks if a backbone section is
+    missing. Local generation timeout raised (a 7B on CPU can take minutes).
+- **Local model tiers in Settings.** For Ollama, the free-text model field becomes a
+  named picker: **7B — Balanced (recommended)** (`qwen2.5:7b`, ~4.7 GB, runs anywhere)
+  or **14B — Best quality** (`qwen2.5:14b`, ~9 GB, needs a 12 GB+ GPU), plus a
+  **Custom model…** escape hatch. A best-effort NVIDIA/AMD GPU probe drives an honest
+  recommendation, shown only for the 14B tier. The Server URL field is hidden for a
+  local preset tier (localhost implied). Tier owns the model tag; the rest of the
+  pipeline is unchanged.
+- **One-shot Jira.** Optional *Auto-generate after each dictation* setting: a single
+  dictated note generates the ticket automatically, no Generate Jira click.
 
 ### Generic Jira presets (v2.0.1) ✅
 - Renamed the default built-in Jira profile from a client-specific name to the
