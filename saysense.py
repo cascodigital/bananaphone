@@ -842,7 +842,7 @@ class DictationApp:
         self.internal_tab = self.jira_tabs.add("Internal")
         self.history_tab = self.jira_tabs.add("History")
 
-        self.raw_notes_text = self._build_panel_textbox(self.raw_notes_tab)
+        self.raw_notes_text = self._build_panel_textbox(self.raw_notes_tab, editable=True)
 
         self.customer_actions_frame = ctk.CTkFrame(self.customer_tab, fg_color="transparent")
         self.customer_actions_frame.pack(fill=tk.X, padx=4, pady=(4, 0))
@@ -991,7 +991,33 @@ class DictationApp:
         menu.pack(fill=tk.X)
         return menu
 
-    def _build_panel_textbox(self, parent):
+    @staticmethod
+    def humanize_api_error(code, body):
+        """Turn a raw provider error body into a short, readable line.
+
+        Providers return a JSON envelope ({"error": {"code", "message", ...}}).
+        We pull the message out instead of dumping truncated raw JSON at the user.
+        """
+        message = ""
+        try:
+            parsed = json.loads(body)
+            err = parsed.get("error", parsed) if isinstance(parsed, dict) else {}
+            if isinstance(err, dict):
+                message = err.get("message") or err.get("status") or ""
+            elif isinstance(err, str):
+                message = err
+        except (ValueError, TypeError, AttributeError):
+            message = (body or "").strip()
+        message = " ".join(message.split())
+        if code == 429:
+            prefix = "Quota/rate limit exceeded (429)"
+            return f"{prefix}: {message[:140]}" if message else prefix
+        if code in (401, 403):
+            prefix = f"Auth failed ({code})"
+            return f"{prefix}: {message[:140]}" if message else prefix
+        return f"HTTP {code}: {message[:140]}" if message else f"HTTP {code}"
+
+    def _build_panel_textbox(self, parent, editable=False):
         textbox = ctk.CTkTextbox(
             parent,
             height=160,
@@ -1003,7 +1029,8 @@ class DictationApp:
             wrap="word",
         )
         textbox.pack(fill=tk.BOTH, expand=True, padx=4, pady=4)
-        textbox.configure(state="disabled")
+        if not editable:
+            textbox.configure(state="disabled")
         return textbox
 
     def setup_bindings(self):
@@ -1102,18 +1129,31 @@ class DictationApp:
         self.result_text.insert("end", text)
         self.result_text.configure(state="disabled")
 
-    def set_text_widget(self, widget, text):
+    def set_text_widget(self, widget, text, editable=False):
         widget.configure(state="normal")
         widget.delete("1.0", "end")
         widget.insert("end", text)
-        widget.configure(state="disabled")
+        if not editable:
+            widget.configure(state="disabled")
 
     def set_jira_text(self, customer_comment, internal_note):
         self.set_text_widget(self.customer_text, customer_comment)
         self.set_text_widget(self.internal_text, internal_note)
 
     def refresh_raw_notes_text(self):
-        self.set_text_widget(self.raw_notes_text, "\n\n".join(self.jira_raw_notes))
+        self.set_text_widget(self.raw_notes_text, "\n\n".join(self.jira_raw_notes), editable=True)
+        self.refresh_jira_status()
+
+    def sync_raw_notes_from_widget(self):
+        """Pull any manual edits from the Raw Notes box back into the list.
+
+        The box is the source of truth at generate time, so a tweaked name or
+        wording the user typed before generating actually reaches the model.
+        """
+        if not hasattr(self, "raw_notes_text"):
+            return
+        text = self.raw_notes_text.get("1.0", "end").strip()
+        self.jira_raw_notes = [note.strip() for note in text.split("\n\n") if note.strip()]
         self.refresh_jira_status()
 
     def refresh_jira_status(self):
@@ -1203,6 +1243,7 @@ class DictationApp:
     def generate_jira_from_notes(self, style_instruction=None):
         if self.is_recording or self.model_loading or self.refreshing_models or self.generating_jira:
             return
+        self.sync_raw_notes_from_widget()
         notes = "\n\n".join(self.jira_raw_notes).strip()
         if not notes:
             self.update_status("No Raw Notes to generate JIRA output.", COLOR_WARN)
@@ -1917,7 +1958,7 @@ class DictationApp:
                 self.root.after(0, finish_test, f"OK — {model} replied in {elapsed:.1f}s.", COLOR_OK)
             except urllib.error.HTTPError as exc:
                 detail = exc.read().decode("utf-8", errors="replace")
-                self.root.after(0, finish_test, f"HTTP {exc.code}: {detail[:80]}", COLOR_ERROR)
+                self.root.after(0, finish_test, self.humanize_api_error(exc.code, detail), COLOR_ERROR)
             except urllib.error.URLError as exc:
                 self.root.after(0, finish_test, f"Unreachable: {exc.reason}", COLOR_ERROR)
             except Exception as exc:
@@ -3228,7 +3269,7 @@ class DictationApp:
                 data = json.loads(response.read().decode("utf-8"))
         except urllib.error.HTTPError as exc:
             details = exc.read().decode("utf-8", errors="replace")
-            raise RuntimeError(f"Text HTTP {exc.code}: {details[:160]}")
+            raise RuntimeError(self.humanize_api_error(exc.code, details))
         except urllib.error.URLError as exc:
             raise RuntimeError(f"Text provider unreachable ({self.text_provider}): {exc.reason}")
 
@@ -3288,7 +3329,7 @@ class DictationApp:
                 payload = json.loads(response.read().decode("utf-8"))
         except urllib.error.HTTPError as exc:
             details = exc.read().decode("utf-8", errors="replace")
-            raise RuntimeError(f"OpenAI HTTP {exc.code}: {details[:180]}")
+            raise RuntimeError(self.humanize_api_error(exc.code, details))
         except urllib.error.URLError as exc:
             if self.get_gemini_api_key():
                 try:
@@ -3351,7 +3392,7 @@ class DictationApp:
                 data = json.loads(response.read().decode("utf-8"))
         except urllib.error.HTTPError as exc:
             details = exc.read().decode("utf-8", errors="replace")
-            raise RuntimeError(f"Gemini HTTP {exc.code}: {details[:180]}")
+            raise RuntimeError(self.humanize_api_error(exc.code, details))
         except urllib.error.URLError as exc:
             raise RuntimeError(f"Network failure: {exc.reason}")
 
