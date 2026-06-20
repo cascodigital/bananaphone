@@ -168,6 +168,15 @@ GEMINI_GENERATE_URL = os.environ.get(
 SPEECH_PROVIDER_LABELS = {"openai": "OpenAI", "gemini": "Gemini"}
 NETWORK_RETRY_DELAYS = (0.0, 0.8, 1.8)
 
+# Gemini 2.5 models think by default, which on the OpenAI-compat endpoint shows up
+# as wildly variable latency (a one-line translation can burn 100+ thinking tokens
+# and occasionally stall for minutes). We cap thinking per task: translation needs
+# none; Jira gets a small bounded budget so quality holds without runaway spikes.
+# Only Gemini honors reasoning_effort here — OpenAI's gpt-4o-mini and Ollama would
+# reject it, so it is injected solely when the text provider is "gemini".
+GEMINI_REASONING_TRANSLATE = "none"
+GEMINI_REASONING_JIRA = "low"
+
 TEXT_PROVIDERS = {
     "OpenAI (cloud)": "openai",
     "Gemini (cloud)": "gemini",
@@ -3235,7 +3244,7 @@ class DictationApp:
                 self.log_exception(f"{label} network attempt {attempt} failed; retrying")
         raise last_error
 
-    def run_text_chat(self, messages, json_mode=False, timeout=90):
+    def run_text_chat(self, messages, json_mode=False, timeout=90, reasoning_effort=GEMINI_REASONING_JIRA):
         model = self.text_model or PROVIDER_DEFAULT_MODEL.get(self.text_provider, DEFAULT_OPENAI_TEXT_MODEL)
         payload = {
             "model": model,
@@ -3244,6 +3253,10 @@ class DictationApp:
         }
         if json_mode:
             payload["response_format"] = {"type": "json_object"}
+        # Cap Gemini's thinking to kill the random multi-minute stalls. Other
+        # providers don't accept this field, so gate it to gemini only.
+        if self.text_provider == "gemini" and reasoning_effort:
+            payload["reasoning_effort"] = reasoning_effort
 
         headers = {"Content-Type": "application/json"}
         if self.text_provider == "ollama":
@@ -3433,7 +3446,8 @@ class DictationApp:
             [
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": text},
-            ]
+            ],
+            reasoning_effort=GEMINI_REASONING_TRANSLATE,
         )
 
     # --- Jira profiles ------------------------------------------------
