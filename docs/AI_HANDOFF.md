@@ -88,6 +88,13 @@ while the app was on 1.9). Keep them in lockstep with `APP_VERSION`.
 - Settings exposes silence timeout, provider selection, API keys, model/server
   settings, and Jira Extra Instructions.
 - Hidden advanced Jira full-prompt override exists for power users.
+- Gemini text calls cap thinking via `reasoning_effort`, injected in
+  `run_text_chat` only when the provider is `gemini` (OpenAI/Ollama reject the
+  field). Constants `GEMINI_REASONING_TRANSLATE` (`"none"`) and
+  `GEMINI_REASONING_JIRA` (`"low"`) at the top of `saysense.py`. This exists
+  because `gemini-2.5-flash` thinks by default, which caused random
+  multi-minute stalls (worsened by the 90s timeout x3 retry loop) and wasted
+  paid output tokens. Tune the budgets via those two constants, not per-call.
 
 ## Local Install / Runtime
 
