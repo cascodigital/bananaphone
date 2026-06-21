@@ -2,13 +2,14 @@
 
 # SaySense
 
-### You speak. It makes sense.
+**You speak. It makes sense.**
 
-**Dictate in Portuguese, Spanish or English — get clean, professional text in the language you need, already on your clipboard.**
+Dictate in Portuguese, Spanish or English — get clean, professional text in the language you need, already on your clipboard.
 Built for IT support: turn spoken case notes into ticket-ready Jira documentation in one click — and keep every word on your own machine if you want to.
 
-![Status](https://img.shields.io/badge/Status-2.0.1-brightgreen)
-![License](https://img.shields.io/badge/License-MIT-blue)
+![Status](https://img.shields.io/badge/Status-2.0.1-16A34A?style=flat-square)
+![License](https://img.shields.io/badge/License-MIT-2563EB?style=flat-square)
+![Casco Digital](https://img.shields.io/badge/Casco-Digital-111827?style=flat-square)
 ![Platforms](https://img.shields.io/badge/Windows%20%7C%20Linux-supported-success?style=flat-square)
 ![Python](https://img.shields.io/badge/Python-3.10+-3776AB?style=flat-square&logo=python&logoColor=white)
 ![OpenAI](https://img.shields.io/badge/OpenAI-cloud-412991?style=flat-square&logo=openai&logoColor=white)
