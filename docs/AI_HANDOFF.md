@@ -101,14 +101,14 @@ while the app was on 1.9). Keep them in lockstep with `APP_VERSION`.
 On Linux, install or refresh from source with:
 
 ```bash
-cd /home/aristofeles/ai/projects/saysense
+cd /home/aristofeles/ai/git/github/cascodigital/saysense
 ./install.sh
 ```
 
 Current launcher:
 
 - `~/.local/share/applications/saysense.desktop`
-- Exec: `/home/aristofeles/ai/projects/saysense/.venv/bin/python /home/aristofeles/ai/projects/saysense/saysense.py`
+- Exec: `/home/aristofeles/ai/git/github/cascodigital/saysense/.venv/bin/python /home/aristofeles/ai/git/github/cascodigital/saysense/saysense.py`
 
 Do not launch the GUI during automated verification unless the user explicitly
 asks; use `py_compile`, static imports, and package/release checks first.
@@ -230,7 +230,7 @@ Local wrapper installed by `install.sh`:
 
 Wrapper behavior:
 
-- Defines the source checkout as `/home/aristofeles/ai/projects/saysense`.
+- Defines the source checkout as `/home/aristofeles/ai/git/github/cascodigital/saysense`.
 - Defines the app entrypoint as `saysense.py` inside that checkout.
 - Writes a command request atomically to:
 
@@ -248,7 +248,7 @@ Wrapper behavior:
 - If no window exists, it launches:
 
 ```bash
-/home/aristofeles/ai/projects/saysense/.venv/bin/python /home/aristofeles/ai/projects/saysense/saysense.py
+/home/aristofeles/ai/git/github/cascodigital/saysense/.venv/bin/python /home/aristofeles/ai/git/github/cascodigital/saysense/saysense.py
 ```
 
 App-side implementation:
