@@ -8,6 +8,13 @@
 - Internal repository / historical codename: `saysense`
 - Legacy app kept for reference: `bananafone.py` / `README_V1.md`
 
+## Active Workspace Contract
+
+- Canonical local checkout: `/home/aristofeles/ai/git/github/cascodigital/saysense`
+- Canonical GitHub repo: `https://github.com/cascodigital/saysense`
+- This is the only active dictation/Jira app. Bananafone/BananaPhone repos were retired; do not look for the active app under `~/ai/projects` or `~/code/bananafone`.
+- Future AI sessions should treat this path as already correct and continue development here unless Andre explicitly requests a move.
+
 The public-facing app name is SaySense. Do not rebrand releases, screenshots,
 installers, desktop entries, or README copy back to BananaPhone unless the owner
 explicitly asks for that rollback.
