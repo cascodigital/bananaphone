@@ -7,7 +7,7 @@
 Dictate in Portuguese, Spanish or English — get clean, professional text in the language you need, already on your clipboard.
 Built for IT support: turn spoken case notes into ticket-ready Jira documentation in one click — and keep every word on your own machine if you want to.
 
-![Status](https://img.shields.io/badge/Status-2.0.1-16A34A?style=flat-square)
+![Status](https://img.shields.io/badge/Status-2.2.0-16A34A?style=flat-square)
 ![License](https://img.shields.io/badge/License-MIT-2563EB?style=flat-square)
 ![Casco Digital](https://img.shields.io/badge/Casco-Digital-111827?style=flat-square)
 ![Platforms](https://img.shields.io/badge/Windows%20%7C%20Linux-supported-success?style=flat-square)
@@ -32,16 +32,16 @@ SaySense collapses that loop into one hotkey. Talk in your language; polished te
 
 <div align="center">
 
-| Dictate mode | Jira Mode |
-|:---:|:---:|
-| ![Dictate mode](docs/screenshots/dictate-mode.png) | ![Jira Mode](docs/screenshots/jira-mode.png) |
-| Press to talk, auto-stops on silence, result on your clipboard. | Capture notes live, then generate Customer + Internal in one click. |
+![Jira Mode end to end](docs/screenshots/demo.gif)
+
+*Paste raw call notes → **Generate** → a customer-facing reply and a structured internal note, each editable in place before you copy.*
 
 <br>
 
-![Settings](docs/screenshots/settings.png)
-
-*One provider selector drives speech, translation and Jira — cloud or fully local.*
+| The workspace | One selector, cloud or local |
+|:---:|:---:|
+| ![Jira Mode](docs/screenshots/jira-mode.png) | ![Settings](docs/screenshots/settings.png) |
+| Capture notes live; Customer / Internal / Raw Notes / History as tabs. | The same provider drives speech, translation and Jira — and the main window tells you, in real time, whether anything leaves the machine. |
 
 </div>
 
@@ -53,6 +53,7 @@ SaySense collapses that loop into one hotkey. Talk in your language; polished te
 - 🌍 **Language routing** — speak Portuguese, Spanish or English; output in any of the three. Brazilian-Portuguese tuned.
 - 🎫 **Jira Mode** — every dictated note is cleaned into professional English as you capture it. One click turns the pile of notes into a **customer reply** + a **structured internal note**, with switchable tone/length **profiles** (Company, MSP client, Internal helpdesk, Strict).
 - 🔁 **Regenerate on the fly** — shorter, more technical, more customer-friendly, or with a follow-up — without re-dictating.
+- ✏️ **Editable output** — every generated panel (Customer, Internal, Transcript) toggles to editable in place, so you tweak the one word the model got wrong before it hits your clipboard — no full regenerate.
 - 🧠 **One AI selector, four backends** — OpenAI, Gemini, local **Ollama**, or any OpenAI-compatible endpoint. It drives speech, translation and Jira text together.
 - ⚡ **Light on resources** — local models unload from RAM 60s after a call instead of squatting on your memory.
 
@@ -95,6 +96,11 @@ Most dictation tools ship your microphone to someone else's server. SaySense let
 Pick the **Ollama + local Whisper** path and *nothing* leaves the machine: audio is transcribed locally with `faster-whisper`, and translation/Jira text runs on a local LLM. No keys, no cloud, no audit trail. Perfect for ticket content you can't legally send to a third party. Prefer speed and top-tier quality? Switch to OpenAI or Gemini in one dropdown. Your call, every time.
 
 ---
+
+## ✨ New in 2.2
+
+- **Edit before you copy** — Customer Comment, Internal Note and the Dictate transcript are read-only by default but flip to editable with a single **Edit** toggle. Fix a name, a path, a tone the model overcooked — then copy. No round-trip through Regenerate for a one-word change.
+- **Copy Transcript** — the Dictate tab gets its own copy button, so the polished transcript is one click away even after you've moved focus.
 
 ## ✨ New in 2.1
 
