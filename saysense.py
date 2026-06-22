@@ -33,7 +33,7 @@ except Exception:
     pynput_keyboard = None
 
 APP_NAME = "SaySense"
-APP_VERSION = "2.1.0"
+APP_VERSION = "2.2.0"
 APP_TITLE = f"{APP_NAME} {APP_VERSION}"
 
 # --- Self-update (GitHub Releases) -----------------------------------------
@@ -735,7 +735,32 @@ class DictationApp:
             corner_radius=12,
         )
         self.transcript_tab = self.dictate_tabs.add("Transcript")
+        self.transcript_actions_frame = ctk.CTkFrame(self.transcript_tab, fg_color="transparent")
+        self.transcript_actions_frame.pack(fill=tk.X, padx=4, pady=(4, 0))
+        self.copy_transcript_button = ctk.CTkButton(
+            self.transcript_actions_frame,
+            text="Copy Transcript",
+            font=ctk.CTkFont(size=11, weight="bold"),
+            height=28,
+            corner_radius=8,
+            fg_color=BTN_NEUTRAL,
+            hover_color=BTN_NEUTRAL_HOVER,
+            command=self.copy_transcript,
+        )
+        self.copy_transcript_button.pack(side=tk.RIGHT)
         self.result_text = self._build_panel_textbox(self.transcript_tab)
+        self.edit_transcript_button = ctk.CTkButton(
+            self.transcript_actions_frame,
+            text="Edit",
+            width=70,
+            font=ctk.CTkFont(size=11, weight="bold"),
+            height=28,
+            corner_radius=8,
+            fg_color=BTN_NEUTRAL,
+            hover_color=BTN_NEUTRAL_HOVER,
+            command=lambda: self.toggle_panel_edit(self.result_text, self.edit_transcript_button),
+        )
+        self.edit_transcript_button.pack(side=tk.RIGHT, padx=(0, 6))
 
         # Jira controls (left column) ----------------------------------
         self.jira_controls_frame = ctk.CTkFrame(left_col, fg_color="transparent")
@@ -867,6 +892,18 @@ class DictationApp:
         )
         self.copy_customer_button.pack(side=tk.RIGHT)
         self.customer_text = self._build_panel_textbox(self.customer_tab)
+        self.edit_customer_button = ctk.CTkButton(
+            self.customer_actions_frame,
+            text="Edit",
+            width=70,
+            font=ctk.CTkFont(size=11, weight="bold"),
+            height=28,
+            corner_radius=8,
+            fg_color=BTN_NEUTRAL,
+            hover_color=BTN_NEUTRAL_HOVER,
+            command=lambda: self.toggle_panel_edit(self.customer_text, self.edit_customer_button),
+        )
+        self.edit_customer_button.pack(side=tk.RIGHT, padx=(0, 6))
 
         self.internal_actions_frame = ctk.CTkFrame(self.internal_tab, fg_color="transparent")
         self.internal_actions_frame.pack(fill=tk.X, padx=4, pady=(4, 0))
@@ -882,6 +919,18 @@ class DictationApp:
         )
         self.copy_internal_button.pack(side=tk.RIGHT)
         self.internal_text = self._build_panel_textbox(self.internal_tab)
+        self.edit_internal_button = ctk.CTkButton(
+            self.internal_actions_frame,
+            text="Edit",
+            width=70,
+            font=ctk.CTkFont(size=11, weight="bold"),
+            height=28,
+            corner_radius=8,
+            fg_color=BTN_NEUTRAL,
+            hover_color=BTN_NEUTRAL_HOVER,
+            command=lambda: self.toggle_panel_edit(self.internal_text, self.edit_internal_button),
+        )
+        self.edit_internal_button.pack(side=tk.RIGHT, padx=(0, 6))
         self.history_text = self._build_panel_textbox(self.history_tab)
 
         self.history_actions_frame = ctk.CTkFrame(self.history_tab, fg_color="transparent")
@@ -1105,6 +1154,10 @@ class DictationApp:
         self.regenerate_button.configure(state=control_state)
         self.copy_customer_button.configure(state=control_state)
         self.copy_internal_button.configure(state=control_state)
+        self.edit_customer_button.configure(state=control_state)
+        self.edit_internal_button.configure(state=control_state)
+        self.edit_transcript_button.configure(state=control_state)
+        self.copy_transcript_button.configure(state=control_state)
 
     def set_hold_button_idle(self):
         self.hold_button.configure(
@@ -1132,11 +1185,33 @@ class DictationApp:
             state="disabled",
         )
 
+    def toggle_panel_edit(self, widget, button):
+        """Flip a generated-output box between read-only and editable.
+
+        Lets André tweak a Customer/Internal/Transcript draft in place before
+        copying it, instead of regenerating or editing the raw notes.
+        """
+        # CTkTextbox.cget("state") raises in this CustomTkinter version, so the
+        # button label is the source of truth for the current edit state.
+        if button.cget("text") == "Edit":
+            widget.configure(state="normal")
+            widget.focus_set()
+            button.configure(text="Done", fg_color=BTN_PRIMARY, hover_color=BTN_PRIMARY_HOVER)
+        else:
+            widget.configure(state="disabled")
+            button.configure(text="Edit", fg_color=BTN_NEUTRAL, hover_color=BTN_NEUTRAL_HOVER)
+
+    def reset_edit_button(self, button):
+        if button is not None:
+            button.configure(text="Edit", fg_color=BTN_NEUTRAL, hover_color=BTN_NEUTRAL_HOVER)
+
     def set_result_text(self, text):
         self.result_text.configure(state="normal")
         self.result_text.delete("1.0", "end")
         self.result_text.insert("end", text)
         self.result_text.configure(state="disabled")
+        if hasattr(self, "edit_transcript_button"):
+            self.reset_edit_button(self.edit_transcript_button)
 
     def set_text_widget(self, widget, text, editable=False):
         widget.configure(state="normal")
@@ -1148,6 +1223,10 @@ class DictationApp:
     def set_jira_text(self, customer_comment, internal_note):
         self.set_text_widget(self.customer_text, customer_comment)
         self.set_text_widget(self.internal_text, internal_note)
+        if hasattr(self, "edit_customer_button"):
+            self.reset_edit_button(self.edit_customer_button)
+        if hasattr(self, "edit_internal_button"):
+            self.reset_edit_button(self.edit_internal_button)
 
     def refresh_raw_notes_text(self):
         self.set_text_widget(self.raw_notes_text, "\n\n".join(self.jira_raw_notes), editable=True)
@@ -1198,6 +1277,12 @@ class DictationApp:
             customer = customer[:120] + ("..." if len(customer) > 120 else "")
             lines.append(f"{index}. {timestamp} - {customer}")
         self.set_text_widget(self.history_text, "\n\n".join(lines) if lines else "No generated tickets yet.")
+
+    def copy_transcript(self):
+        text = self.result_text.get("1.0", "end").strip()
+        if text:
+            self.copy_to_clipboard(text)
+            self.update_status("Transcript copied.", COLOR_OK)
 
     def copy_customer_comment(self):
         text = self.customer_text.get("1.0", "end").strip()
