@@ -178,6 +178,14 @@ No key is required for the Ollama path — the app can install Ollama and pull t
 
 ---
 
+## Support
+
+SaySense is free and MIT-licensed. If it saves you a few tickets' worth of typing, you can throw a coffee my way — entirely optional, never gated.
+
+[![PayPal](https://img.shields.io/badge/PayPal-Buy%20me%20a%20coffee-00457C?style=flat-square&logo=paypal&logoColor=white)](https://www.paypal.com/donate/?business=andre%40kittler.com.br&item_name=Support+SaySense&currency_code=USD)
+
+---
+
 ## License
 
 MIT — see [LICENSE](LICENSE).
