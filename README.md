@@ -32,16 +32,15 @@ SaySense collapses that loop into one hotkey. Talk in your language; polished te
 
 <div align="center">
 
-![Jira Mode end to end](docs/screenshots/demo.gif)
+<img src="docs/screenshots/demo.gif" alt="Jira Mode end to end" width="560">
 
-*Paste raw call notes → **Generate** → a customer-facing reply and a structured internal note, each editable in place before you copy.*
+<em>Rough call notes in → <strong>Generate</strong> → a customer-facing reply and a structured internal note, each editable in place before you copy.</em>
 
-<br>
+<br><br>
 
-| The workspace | One selector, cloud or local |
-|:---:|:---:|
-| ![Jira Mode](docs/screenshots/jira-mode.png) | ![Settings](docs/screenshots/settings.png) |
-| Capture notes live; Customer / Internal / Raw Notes / History as tabs. | The same provider drives speech, translation and Jira — and the main window tells you, in real time, whether anything leaves the machine. |
+<img src="docs/screenshots/jira-mode.png" alt="Jira Mode workspace" width="380">&nbsp;&nbsp;<img src="docs/screenshots/settings.png" alt="Settings" width="380">
+
+<em>Left: the workspace — Customer / Internal / Raw Notes / History as tabs. Right: one provider selector for speech, translation and Jira, with a live readout of whether audio or ticket text ever leaves the machine.</em>
 
 </div>
 
