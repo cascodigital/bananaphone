@@ -30,11 +30,13 @@ SaySense collapses that loop into one hotkey. Talk in your language; polished te
 
 ## See it
 
+**You speak Brazilian Portuguese. The ticket comes out in English.** That's the whole trick — dictate rough notes in the language you think in, and get a clean customer reply plus a structured internal note in the language your tools and clients expect. The `INPUT → OUTPUT` selector sets the direction; the full text of one real case is in [Jira Mode, end to end](#jira-mode-end-to-end) below.
+
 <div align="center">
 
 <img src="docs/screenshots/demo.gif" alt="Jira Mode end to end" width="560">
 
-<em>Rough call notes in → <strong>Generate</strong> → a customer-facing reply and a structured internal note, each editable in place before you copy.</em>
+<em>Raw call notes in → <strong>Generate</strong> → a customer-facing reply and a structured internal note, each editable in place before you copy.</em>
 
 <br><br>
 
@@ -68,7 +70,7 @@ SaySense collapses that loop into one hotkey. Talk in your language; polished te
 
 You work the call in your own language and let SaySense do the paperwork. Here's a real-shaped ticket — three rough notes dictated **in Portuguese** while troubleshooting, then the one-click output.
 
-**What you dictate (captured live, messy, out of order):**
+**🇧🇷 What you dictate — Brazilian Portuguese (captured live, messy, out of order):**
 
 > *"a usuária Marina do financeiro abriu chamado, o Teams não carrega, fica na tela de carregando infinito, ela tá no notebook novo"*
 >
@@ -76,11 +78,11 @@ You work the call in your own language and let SaySense do the paperwork. Here's
 >
 > *"no fim era credencial em cache, fui no Gerenciador de Credenciais do Windows e apaguei as entradas do MicrosoftOffice16, reiniciei o Teams, pediu login de novo e entrou normal, deixei pra ela confirmar amanhã"*
 
-**What lands on your clipboard — Customer Comment (public):**
+**🇺🇸 What lands on your clipboard — Customer Comment in English (public):**
 
 > Hi Marina, we've identified and resolved the issue with Teams not loading on your new notebook. The problem was related to cached credentials. After clearing these, Teams prompted for a login again and is now functioning normally. Please confirm tomorrow if everything is working as expected.
 
-**Internal Note (support team only):**
+**🇺🇸 Internal Note in English (support team only):**
 
 > **Issue:** Teams stuck on loading screen on new notebook for user Marina from finance.  
 > **Investigation:** Cleared cache in `AppData\Microsoft\Teams` and removed Teams new folder without success.  
