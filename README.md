@@ -38,9 +38,15 @@ SaySense collapses that loop into one hotkey. Talk in your language; polished te
 
 <br><br>
 
-<img src="docs/screenshots/jira-mode.png" alt="Jira Mode workspace" width="380">&nbsp;&nbsp;<img src="docs/screenshots/settings.png" alt="Settings" width="380">
+<img src="docs/screenshots/jira-mode.png" alt="Jira Mode workspace" width="560">
 
-<em>Left: the workspace — Customer / Internal / Raw Notes / History as tabs. Right: one provider selector for speech, translation and Jira, with a live readout of whether audio or ticket text ever leaves the machine.</em>
+<em>The workspace — Customer / Internal / Raw Notes / History as tabs, captured live and generated in one click.</em>
+
+<br><br>
+
+<img src="docs/screenshots/settings.png" alt="Settings" width="360">
+
+<em>One provider selector drives speech, translation and Jira — cloud or fully local — with a live readout of whether audio or ticket text ever leaves the machine.</em>
 
 </div>
 
