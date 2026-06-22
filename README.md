@@ -36,7 +36,7 @@ SaySense collapses that loop into one hotkey. Talk in your language; polished te
 
 <img src="docs/screenshots/demo.gif" alt="Jira Mode end to end" width="560">
 
-<em>Raw call notes in → <strong>Generate</strong> → a customer-facing reply and a structured internal note, each editable in place before you copy.</em>
+<em>Dictate during the call in Brazilian Portuguese; the notes land already in English. One <strong>Generate</strong> turns them into a customer-facing reply and a structured internal note — each editable in place before you copy.</em>
 
 <br><br>
 
