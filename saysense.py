@@ -33,7 +33,7 @@ except Exception:
     pynput_keyboard = None
 
 APP_NAME = "SaySense"
-APP_VERSION = "2.2.0"
+APP_VERSION = "2.2.1"
 APP_TITLE = f"{APP_NAME} {APP_VERSION}"
 
 # --- Self-update (GitHub Releases) -----------------------------------------
@@ -512,6 +512,7 @@ class DictationApp:
         self.root.geometry("860x720")
         self.root.minsize(820, 660)
         self.root.attributes("-topmost", True)
+        self.root.after(400, lambda: self.root.attributes("-topmost", False))
         self.root.configure(fg_color=COLOR_WINDOW)
         self.root.eval("tk::PlaceWindow . center")
 

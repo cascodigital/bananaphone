@@ -1,8 +1,14 @@
 # Future Releases
 
-Status as of v2.1.0.
+Status as of v2.2.1.
 
 ## Done
+
+### Window always-on-top fix (v2.2.1) ✅
+- The dictation window set `-topmost True` at init and never cleared it, so it stayed
+  glued over every other window for its whole lifetime. Now it pops to front on launch
+  and releases topmost after 400ms (`saysense.py` `DictationApp.__init__`), keeping the
+  intended "appear when summoned" behavior without hogging the foreground.
 
 ### Local Jira quality + model tiers + one-shot (v2.1.0) ✅
 - **Robust local Jira pipeline.** Small local models (qwen2.5:7b) used to break the
