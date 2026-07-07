@@ -34,7 +34,7 @@ except Exception:
     pynput_keyboard = None
 
 APP_NAME = "SaySense"
-APP_VERSION = "2.2.3"
+APP_VERSION = "2.2.4"
 APP_TITLE = f"{APP_NAME} {APP_VERSION}"
 
 # --- Self-update (GitHub Releases) -----------------------------------------
@@ -3951,7 +3951,7 @@ if __name__ == "__main__":
     try:
         ctk.set_appearance_mode("dark")
         ctk.set_default_color_theme("dark-blue")
-        root = ctk.CTk()
+        root = ctk.CTk(className="SaySense")
         app = DictationApp(root)
         root.mainloop()
     except Exception:
