@@ -33,7 +33,7 @@ except Exception:
     pynput_keyboard = None
 
 APP_NAME = "SaySense"
-APP_VERSION = "2.2.1"
+APP_VERSION = "2.2.2"
 APP_TITLE = f"{APP_NAME} {APP_VERSION}"
 
 # --- Self-update (GitHub Releases) -----------------------------------------
@@ -586,6 +586,7 @@ class DictationApp:
         self.jira_mode = self.default_jira_mode
         self.jira_raw_notes = []
         self.jira_history = self.load_jira_history()
+        self.selected_history_index = 0
         self.last_jira_output = None
         self.generating_jira = False
         self.update_dismissed_tag = self.settings.get("update_dismissed_tag", "")
@@ -935,36 +936,39 @@ class DictationApp:
         self.history_text = self._build_panel_textbox(self.history_tab)
 
         self.history_actions_frame = ctk.CTkFrame(self.history_tab, fg_color="transparent")
-        self.history_actions_frame.pack(fill=tk.X, pady=(6, 0))
+        self.history_actions_frame.pack(pady=(6, 0))
         ctk.CTkButton(
             self.history_actions_frame,
-            text="Reopen Latest",
+            text="Reopen",
+            width=80,
             font=ctk.CTkFont(size=11, weight="bold"),
             height=28,
             corner_radius=8,
             fg_color=BTN_NEUTRAL,
             hover_color=BTN_NEUTRAL_HOVER,
-            command=self.reopen_latest_jira,
+            command=self.reopen_selected_jira,
+        ).pack(side=tk.LEFT, padx=(4, 6))
+        ctk.CTkButton(
+            self.history_actions_frame,
+            text="Copy Customer",
+            width=110,
+            font=ctk.CTkFont(size=11, weight="bold"),
+            height=28,
+            corner_radius=8,
+            fg_color=BTN_NEUTRAL,
+            hover_color=BTN_NEUTRAL_HOVER,
+            command=self.copy_selected_customer,
         ).pack(side=tk.LEFT, padx=(0, 6))
         ctk.CTkButton(
             self.history_actions_frame,
-            text="Copy Latest Customer",
+            text="Copy Internal",
+            width=110,
             font=ctk.CTkFont(size=11, weight="bold"),
             height=28,
             corner_radius=8,
             fg_color=BTN_NEUTRAL,
             hover_color=BTN_NEUTRAL_HOVER,
-            command=self.copy_latest_customer,
-        ).pack(side=tk.LEFT, padx=(0, 6))
-        ctk.CTkButton(
-            self.history_actions_frame,
-            text="Copy Latest Internal",
-            font=ctk.CTkFont(size=11, weight="bold"),
-            height=28,
-            corner_radius=8,
-            fg_color=BTN_NEUTRAL,
-            hover_color=BTN_NEUTRAL_HOVER,
-            command=self.copy_latest_internal,
+            command=self.copy_selected_internal,
         ).pack(side=tk.LEFT)
 
         self.jira_validation_label = ctk.CTkLabel(
@@ -1271,13 +1275,41 @@ class DictationApp:
     def refresh_history_text(self):
         if not hasattr(self, "history_text"):
             return
-        lines = []
-        for index, entry in enumerate(self.jira_history, start=1):
+        if self.jira_history and self.selected_history_index >= len(self.jira_history):
+            self.selected_history_index = 0
+        widget = self.history_text
+        widget.configure(state="normal")
+        widget.delete("1.0", "end")
+        if not self.jira_history:
+            widget.insert("end", "No generated tickets yet.")
+            widget.configure(state="disabled")
+            return
+        inner = widget._textbox
+        for index, entry in enumerate(self.jira_history):
             timestamp = entry.get("time", "")
             customer = entry.get("customer_comment", "").replace("\n", " ").strip()
             customer = customer[:120] + ("..." if len(customer) > 120 else "")
-            lines.append(f"{index}. {timestamp} - {customer}")
-        self.set_text_widget(self.history_text, "\n\n".join(lines) if lines else "No generated tickets yet.")
+            tag = f"hist_{index}"
+            prefix = "\n" if index else ""
+            widget.insert("end", f"{prefix}{index + 1}. {timestamp} - {customer}\n", (tag,))
+            if index == self.selected_history_index:
+                inner.tag_config(tag, background=BTN_PRIMARY, foreground="#FFFFFF")
+            else:
+                inner.tag_config(tag, background="", foreground="")
+            inner.tag_bind(tag, "<Button-1>", lambda _e, i=index: self.select_history_entry(i))
+        widget.configure(state="disabled")
+
+    def select_history_entry(self, index):
+        if 0 <= index < len(self.jira_history):
+            self.selected_history_index = index
+            self.refresh_history_text()
+
+    def selected_history_entry(self):
+        if not self.jira_history:
+            return None
+        if not 0 <= self.selected_history_index < len(self.jira_history):
+            self.selected_history_index = 0
+        return self.jira_history[self.selected_history_index]
 
     def copy_transcript(self):
         text = self.result_text.get("1.0", "end").strip()
@@ -1297,28 +1329,30 @@ class DictationApp:
             self.copy_to_clipboard(text)
             self.update_status("Internal Note copied.", COLOR_OK)
 
-    def copy_latest_customer(self):
-        if self.jira_history:
-            self.copy_to_clipboard(self.jira_history[0].get("customer_comment", ""))
-            self.update_status("Latest Customer Comment copied.", COLOR_OK)
+    def copy_selected_customer(self):
+        entry = self.selected_history_entry()
+        if entry:
+            self.copy_to_clipboard(entry.get("customer_comment", ""))
+            self.update_status(f"Customer Comment #{self.selected_history_index + 1} copied.", COLOR_OK)
 
-    def copy_latest_internal(self):
-        if self.jira_history:
-            self.copy_to_clipboard(self.jira_history[0].get("internal_note", ""))
-            self.update_status("Latest Internal Note copied.", COLOR_OK)
+    def copy_selected_internal(self):
+        entry = self.selected_history_entry()
+        if entry:
+            self.copy_to_clipboard(entry.get("internal_note", ""))
+            self.update_status(f"Internal Note #{self.selected_history_index + 1} copied.", COLOR_OK)
 
-    def reopen_latest_jira(self):
-        if not self.jira_history:
+    def reopen_selected_jira(self):
+        entry = self.selected_history_entry()
+        if not entry:
             self.update_status("No Jira history to reopen.", COLOR_WARN)
             return
-        entry = self.jira_history[0]
         self.jira_raw_notes = list(entry.get("raw_notes", []))
         self.refresh_raw_notes_text()
         self.set_jira_text(entry.get("customer_comment", ""), entry.get("internal_note", ""))
         self.last_jira_output = {"time": entry.get("time", "")}
         self.refresh_jira_status()
         self.jira_tabs.set("Customer")
-        self.update_status("Latest Jira output reopened.", COLOR_OK)
+        self.update_status(f"Jira output #{self.selected_history_index + 1} reopened.", COLOR_OK)
 
     def clear_jira_notes(self):
         self.jira_raw_notes = []
@@ -1582,6 +1616,7 @@ class DictationApp:
         }
         self.jira_history.insert(0, entry)
         self.jira_history = self.jira_history[:JIRA_HISTORY_LIMIT]
+        self.selected_history_index = 0
         self.save_jira_history()
 
     def validate_jira_output(self, customer_comment, internal_note):
