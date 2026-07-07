@@ -9,6 +9,7 @@ import ssl
 import subprocess
 import threading
 import time
+import sys
 import tkinter as tk
 import webbrowser
 from tkinter import messagebox
@@ -33,7 +34,7 @@ except Exception:
     pynput_keyboard = None
 
 APP_NAME = "SaySense"
-APP_VERSION = "2.2.2"
+APP_VERSION = "2.2.3"
 APP_TITLE = f"{APP_NAME} {APP_VERSION}"
 
 # --- Self-update (GitHub Releases) -----------------------------------------
@@ -514,6 +515,7 @@ class DictationApp:
         self.root.attributes("-topmost", True)
         self.root.after(400, lambda: self.root.attributes("-topmost", False))
         self.root.configure(fg_color=COLOR_WINDOW)
+        self.set_window_icon()
         self.root.eval("tk::PlaceWindow . center")
 
         self.settings = self.load_settings()
@@ -1095,6 +1097,15 @@ class DictationApp:
         if not editable:
             textbox.configure(state="disabled")
         return textbox
+
+    def set_window_icon(self):
+        base = getattr(sys, "_MEIPASS", os.path.dirname(os.path.abspath(__file__)))
+        icon_path = os.path.join(base, "assets", "bananaphone-256.png")
+        try:
+            self._icon_image = tk.PhotoImage(file=icon_path)
+            self.root.iconphoto(True, self._icon_image)
+        except Exception:
+            self.log_exception(f"window icon not loaded: {icon_path}")
 
     def setup_bindings(self):
         self.root.bind_all("<Control-Shift-d>", self.on_quick_hotkey)

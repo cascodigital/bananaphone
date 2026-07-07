@@ -31,6 +31,7 @@ jobs:
           pyinstaller --noconfirm --clean --windowed --onedir
           --name SaySense
           --icon assets/bananaphone.ico
+          --add-data "assets;assets"
           --collect-all customtkinter
           --collect-all faster_whisper
           --collect-all ctranslate2
@@ -50,6 +51,7 @@ jobs:
           pyinstaller --noconfirm --clean --console --onedir `
             --name SaySense-Debug `
             --icon assets/bananaphone.ico `
+            --add-data "assets;assets" `
             --collect-all customtkinter `
             --collect-all faster_whisper `
             --collect-all ctranslate2 `
@@ -110,6 +112,7 @@ jobs:
         run: >
           pyinstaller --noconfirm --clean --windowed --onedir
           --name SaySense
+          --add-data "assets:assets"
           --collect-all customtkinter
           --collect-all faster_whisper
           --collect-all ctranslate2
