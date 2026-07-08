@@ -1,6 +1,6 @@
 <div align="center">
 
-# SaySense
+# BananaPhone
 
 **You speak. It makes sense.**
 
@@ -24,7 +24,7 @@ Built for IT support: turn spoken case notes into ticket-ready Jira documentatio
 
 Working tickets in a second language means living in three windows at once: a translator, a text editor, and the ticket system. You dictate or type in your head-language, paste it into a translator, clean it up, then move it into the ticket. Every. Single. Note.
 
-SaySense collapses that loop into one hotkey. Talk in your language; polished text lands wherever your cursor is. In **Jira Mode** it goes further — dictate rough notes during the call, then generate a customer-facing reply *and* an internal worklog from all of them at once.
+BananaPhone collapses that loop into one hotkey. Talk in your language; polished text lands wherever your cursor is. In **Jira Mode** it goes further — dictate rough notes during the call, then generate a customer-facing reply *and* an internal worklog from all of them at once.
 
 ---
 
@@ -68,7 +68,7 @@ SaySense collapses that loop into one hotkey. Talk in your language; polished te
 
 ## Jira Mode, end to end
 
-You work the call in your own language and let SaySense do the paperwork. This is the exact case from the demo above — what you say out loud in Portuguese, and the one-click English output that lands.
+You work the call in your own language and let BananaPhone do the paperwork. This is the exact case from the demo above — what you say out loud in Portuguese, and the one-click English output that lands.
 
 **🇧🇷 What you say out loud — Brazilian Portuguese:**
 
@@ -94,7 +94,7 @@ Same notes, switch the **profile** to *MSP client* or *Internal helpdesk* and th
 
 ## 🔒 Privacy is a setting, not a promise
 
-Most dictation tools ship your microphone to someone else's server. SaySense lets you decide, per provider — and the main window shows you the truth in real time:
+Most dictation tools ship your microphone to someone else's server. BananaPhone lets you decide, per provider — and the main window shows you the truth in real time:
 
 > **Privacy: speech = Local Whisper (audio leaves: No) · text/Jira = Local (ticket text leaves: No)**
 
@@ -127,12 +127,12 @@ Pick the **Ollama + local Whisper** path and *nothing* leaves the machine: audio
 
 ## Download
 
-Grab the latest installer from the **[Releases page](https://github.com/cascodigital/saysense/releases/latest)**:
+Grab the latest installer from the **[Releases page](https://github.com/cascodigital/bananaphone/releases/latest)**:
 
 | Platform | File |
 |----------|------|
-| **Windows** | `SaySense-Setup-<version>.exe` (installer) or `SaySense-Portable-<version>.zip` (no install) |
-| **Linux** | `SaySense-<version>-x86_64.AppImage` |
+| **Windows** | `BananaPhone-Setup-<version>.exe` (installer) or `BananaPhone-Portable-<version>.zip` (no install) |
+| **Linux** | `BananaPhone-<version>-x86_64.AppImage` |
 
 Every asset ships with a `.sha256` checksum.
 
@@ -142,15 +142,15 @@ Every asset ships with a `.sha256` checksum.
 
 ### Linux
 ```bash
-git clone https://github.com/cascodigital/saysense.git
-cd saysense
+git clone https://github.com/cascodigital/bananaphone.git
+cd bananaphone
 ./install.sh                # app + all dependencies (apt/dnf/pacman auto-detected)
 ./install.sh --with-ollama  # also install Ollama for the fully-offline path
-./.venv/bin/python saysense.py
+./.venv/bin/python bananaphone.py
 ```
 
 ### Windows
-Double-click **`Install-SaySense.bat`**, or from PowerShell:
+Double-click **`Install-BananaPhone.bat`**, or from PowerShell:
 ```powershell
 .\install_windows.ps1               # installs Python via winget if missing
 .\install_windows.ps1 -WithOllama   # also install Ollama
@@ -190,9 +190,9 @@ No key is required for the Ollama path — the app can install Ollama and pull t
 
 ## Support
 
-SaySense is free and MIT-licensed. If it saves you a few tickets' worth of typing, you can throw a coffee my way — entirely optional, never gated.
+BananaPhone is free and MIT-licensed. If it saves you a few tickets' worth of typing, you can throw a coffee my way — entirely optional, never gated.
 
-[![PayPal](https://img.shields.io/badge/PayPal-Buy%20me%20a%20coffee-00457C?style=flat-square&logo=paypal&logoColor=white)](https://www.paypal.com/donate/?business=andre%40kittler.com.br&item_name=Support+SaySense&currency_code=USD)
+[![PayPal](https://img.shields.io/badge/PayPal-Buy%20me%20a%20coffee-00457C?style=flat-square&logo=paypal&logoColor=white)](https://www.paypal.com/donate/?business=andre%40kittler.com.br&item_name=Support+BananaPhone&currency_code=USD)
 
 ---
 
@@ -201,5 +201,5 @@ SaySense is free and MIT-licensed. If it saves you a few tickets' worth of typin
 MIT — see [LICENSE](LICENSE).
 
 <div align="center">
-<sub>Project lineage: BananaPhone v1 → BananaPhone v2 → <b>SaySense</b>. Internal storage paths remain <code>bananafone</code>-compatible for backward compatibility.</sub>
+<sub>Project lineage: BananaPhone v1 → BananaPhone v2 → <b>BananaPhone</b>. Internal storage paths remain <code>bananafone</code>-compatible for backward compatibility.</sub>
 </div>

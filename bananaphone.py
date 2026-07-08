@@ -33,15 +33,15 @@ try:
 except Exception:
     pynput_keyboard = None
 
-APP_NAME = "SaySense"
-APP_VERSION = "2.2.5"
+APP_NAME = "BananaPhone"
+APP_VERSION = "2.2.6"
 APP_TITLE = f"{APP_NAME} {APP_VERSION}"
 
 # --- Self-update (GitHub Releases) -----------------------------------------
 # Releases are all pre-releases (tags like v1.9-beta, v1.8.4-beta, v1.5-beta.1),
 # so /releases/latest (which skips pre-releases) is useless here -- we list
 # /releases and pick the highest-sorting tag ourselves.
-GITHUB_REPO = os.environ.get("SAYSENSE_GITHUB_REPO", "cascodigital/saysense")
+GITHUB_REPO = os.environ.get("BANANAPHONE_GITHUB_REPO", "cascodigital/bananaphone")
 GITHUB_RELEASES_API = f"https://api.github.com/repos/{GITHUB_REPO}/releases?per_page=15"
 GITHUB_RELEASES_PAGE = f"https://github.com/{GITHUB_REPO}/releases/latest"
 
@@ -117,7 +117,7 @@ def find_ollama_binary():
     return None
 CPU_THREADS = min(os.cpu_count() or 4, 8)
 LOG_DIR = os.path.expanduser("~/.local/state/bananafone")
-LOG_FILE = os.path.join(LOG_DIR, "saysense.log")
+LOG_FILE = os.path.join(LOG_DIR, "bananaphone.log")
 CONFIG_DIR = os.path.expanduser("~/.config/bananafone")
 SETTINGS_FILE = os.path.join(CONFIG_DIR, "settings_v2.json")
 JIRA_HISTORY_FILE = os.path.join(CONFIG_DIR, "jira_history.json")
@@ -222,7 +222,7 @@ JIRA_LENGTH_PROMPT = {
 # providers and deliberately anchors the four rules they break most often:
 # one section per line, follow-up preserved (not "None"), no jargon in the
 # public field, and identifiers/paths kept verbatim. See memory
-# "saysense-ollama-jira-qualidade".
+# "bananaphone-ollama-jira-qualidade".
 # No ticket number / personal name on purpose: small models parrot literal
 # values from the example into unrelated tickets. The file path and the
 # MicrosoftOffice16 token already teach "preserve identifiers verbatim".
@@ -642,7 +642,7 @@ class DictationApp:
         header.pack(fill=tk.X)
         self.title_label = ctk.CTkLabel(
             header,
-            text="SaySense",
+            text="BananaPhone",
             font=ctk.CTkFont(size=24, weight="bold"),
             text_color=COLOR_TITLE,
         )
@@ -1104,7 +1104,7 @@ class DictationApp:
             if sys.platform == "win32":
                 # Own taskbar identity instead of grouping under python/pythonw.
                 import ctypes
-                ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("CascoDigital.SaySense")
+                ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("CascoDigital.BananaPhone")
                 ico_path = os.path.join(base, "assets", "bananaphone.ico")
                 self.root.iconbitmap(default=ico_path)
                 # CustomTkinter re-applies its own icon ~200ms after startup; beat it.
@@ -1790,7 +1790,7 @@ class DictationApp:
             return  # already prompted for this exact version
         try:
             open_now = messagebox.askyesno(
-                "SaySense update available",
+                "BananaPhone update available",
                 f"A newer build is available: {tag}\n"
                 f"You're running {APP_VERSION}.\n\n"
                 "Open the download page now?",
@@ -1837,7 +1837,7 @@ class DictationApp:
             return
 
         dialog = ctk.CTkToplevel(self.root)
-        dialog.title("SaySense Settings")
+        dialog.title("BananaPhone Settings")
         dialog.geometry("540x800")
         dialog.configure(fg_color=COLOR_WINDOW)
         dialog.transient(self.root)
@@ -3960,11 +3960,11 @@ if __name__ == "__main__":
     try:
         ctk.set_appearance_mode("dark")
         ctk.set_default_color_theme("dark-blue")
-        root = ctk.CTk(className="SaySense")
+        root = ctk.CTk(className="BananaPhone")
         app = DictationApp(root)
         root.mainloop()
     except Exception:
         with open(LOG_FILE, "a", encoding="utf-8") as log:
-            log.write("\n[FATAL] SaySense failed before or during GUI startup\n")
+            log.write("\n[FATAL] BananaPhone failed before or during GUI startup\n")
             traceback.print_exc(file=log)
         raise

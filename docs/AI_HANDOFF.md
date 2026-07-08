@@ -1,21 +1,21 @@
-# SaySense AI Handoff
+# BananaPhone AI Handoff
 
 ## Current Product Identity
 
-- Public product name: **SaySense**
+- Public product name: **BananaPhone**
 - Version line: **2.2.1**
 - Tagline: **You speak. It makes sense.**
-- Internal repository / historical codename: `saysense`
+- Internal repository / historical codename: `bananaphone`
 - Legacy app kept for reference: `bananafone.py` / `README_V1.md`
 
 ## Active Workspace Contract
 
-- Canonical local checkout: `/home/aristofeles/ai/git/github/cascodigital/saysense`
-- Canonical GitHub repo: `https://github.com/cascodigital/saysense`
+- Canonical local checkout: `/home/aristofeles/ai/git/github/cascodigital/bananaphone`
+- Canonical GitHub repo: `https://github.com/cascodigital/bananaphone`
 - This is the only active dictation/Jira app. Bananafone/BananaPhone repos were retired; do not look for the active app under `~/ai/projects` or `~/code/bananafone`.
 - Future AI sessions should treat this path as already correct and continue development here unless Andre explicitly requests a move.
 
-The public-facing app name is SaySense. Do not rebrand releases, screenshots,
+The public-facing app name is BananaPhone. Do not rebrand releases, screenshots,
 installers, desktop entries, or README copy back to BananaPhone unless the owner
 explicitly asks for that rollback.
 
@@ -24,20 +24,20 @@ explicitly asks for that rollback.
 Keep these internal paths and environment variables for backward compatibility:
 
 - Linux settings: `~/.config/bananafone/settings_v2.json`
-- Linux logs: `~/.local/state/bananafone/saysense.log`
+- Linux logs: `~/.local/state/bananafone/bananaphone.log`
 - Jira history: `~/.config/bananafone/jira_history.json`
 - Environment variable prefix: `BANANAFONE_*`
-- Main source file: `saysense.py`
+- Main source file: `bananaphone.py`
 
 These names are technical debt, but changing them now would lose existing keys,
-history, defaults, and support notes. Public branding is SaySense; internal
+history, defaults, and support notes. Public branding is BananaPhone; internal
 storage remains Bananafone/BananaPhone-compatible until a dedicated migration is
 implemented.
 
 ## Canonical defaults (keep in sync across files)
 
 - **Default Ollama model: `qwen2.5:7b`.** The runtime source of truth is
-  `PROVIDER_DEFAULT_MODEL["ollama"]` in `saysense.py`. The provisioning scripts
+  `PROVIDER_DEFAULT_MODEL["ollama"]` in `bananaphone.py`. The provisioning scripts
   `install.sh` and `install_windows.ps1` MUST pull this exact tag. If they
   pull a different model (they used to pull `qwen2.5:3b`), the app requests a
   model that was never pulled and the local endpoint returns
@@ -53,11 +53,11 @@ not hand these steps back to him. This file is the source of truth; there is no
 external/Claude memory to rely on.
 
 The app self-updates by comparing `APP_VERSION` against the newest GitHub
-release tag (`saysense.py` -> `parse_version_key`). If `APP_VERSION` does not
+release tag (`bananaphone.py` -> `parse_version_key`). If `APP_VERSION` does not
 match the tag you push, the in-app update check is wrong by a version. So on
 **every** release, before tagging:
 
-1. **Bump `APP_VERSION` in `saysense.py` (line ~36) to match the tag.**
+1. **Bump `APP_VERSION` in `bananaphone.py` (line ~36) to match the tag.**
    Tag `v2.0` => `APP_VERSION = "2.0"`. Tag `v2.1-beta.2` => `APP_VERSION = "2.1 Beta"`
    (the parser normalizes "2.1 Beta" to the same key as "v2.1-beta", but the
    beta sub-number only comes from the tag — so for `.N` betas, prefer setting
@@ -77,14 +77,14 @@ while the app was on 1.9). Keep them in lockstep with `APP_VERSION`.
 - Tags containing `beta`, such as `v1.5-beta.1`, publish prereleases. A tag with
   no `beta` (e.g. `v2.0`) publishes a full (non-prerelease) release.
 - GitHub Actions builds:
-  - Windows installer: `SaySense-Setup-<version>.exe`
-  - Windows source zip: `SaySense-Source-<version>.zip`
-  - Linux AppImage: `SaySense-<version>-x86_64.AppImage`
+  - Windows installer: `BananaPhone-Setup-<version>.exe`
+  - Windows source zip: `BananaPhone-Source-<version>.zip`
+  - Linux AppImage: `BananaPhone-<version>-x86_64.AppImage`
   - Checksums: `*.sha256`
-  - Optional diagnostic/portable artifacts: `SaySense-Portable-<version>.zip`
-    and `SaySense-Debug-Console-<version>.zip`
-- The active SaySense repository is `cascodigital/saysense`.
-- The historical BananaPhone v2 repository is `cascodigital/saysense`.
+  - Optional diagnostic/portable artifacts: `BananaPhone-Portable-<version>.zip`
+    and `BananaPhone-Debug-Console-<version>.zip`
+- The active BananaPhone repository is `cascodigital/bananaphone`.
+- The historical BananaPhone v2 repository is `cascodigital/bananaphone`.
 
 ## Current Workflow
 
@@ -98,7 +98,7 @@ while the app was on 1.9). Keep them in lockstep with `APP_VERSION`.
 - Gemini text calls cap thinking via `reasoning_effort`, injected in
   `run_text_chat` only when the provider is `gemini` (OpenAI/Ollama reject the
   field). Constants `GEMINI_REASONING_TRANSLATE` (`"none"`) and
-  `GEMINI_REASONING_JIRA` (`"low"`) at the top of `saysense.py`. This exists
+  `GEMINI_REASONING_JIRA` (`"low"`) at the top of `bananaphone.py`. This exists
   because `gemini-2.5-flash` thinks by default, which caused random
   multi-minute stalls (worsened by the 90s timeout x3 retry loop) and wasted
   paid output tokens. Tune the budgets via those two constants, not per-call.
@@ -108,14 +108,14 @@ while the app was on 1.9). Keep them in lockstep with `APP_VERSION`.
 On Linux, install or refresh from source with:
 
 ```bash
-cd /home/aristofeles/ai/git/github/cascodigital/saysense
+cd /home/aristofeles/ai/git/github/cascodigital/bananaphone
 ./install.sh
 ```
 
 Current launcher:
 
-- `~/.local/share/applications/saysense.desktop`
-- Exec: `/home/aristofeles/ai/git/github/cascodigital/saysense/.venv/bin/python /home/aristofeles/ai/git/github/cascodigital/saysense/saysense.py`
+- `~/.local/share/applications/bananaphone.desktop`
+- Exec: `/home/aristofeles/ai/git/github/cascodigital/bananaphone/.venv/bin/python /home/aristofeles/ai/git/github/cascodigital/bananaphone/bananaphone.py`
 
 Do not launch the GUI during automated verification unless the user explicitly
 asks; use `py_compile`, static imports, and package/release checks first.
@@ -133,11 +133,11 @@ asks; use `py_compile`, static imports, and package/release checks first.
 
 - Icon assets still use the old banana-themed filenames and artwork.
 - Config/log/env names still use `bananafone` for compatibility.
-- Existing screenshots may need a visual refresh after the SaySense rename.
+- Existing screenshots may need a visual refresh after the BananaPhone rename.
 
 ## Recommended Next Work
 
-- Replace old banana-themed icon/screenshot assets with SaySense visuals.
+- Replace old banana-themed icon/screenshot assets with BananaPhone visuals.
 - Add Jira documentation profiles instead of making users edit prompts first.
 - Add Settings tabs or a scrollable Settings layout.
 - Add call-note timestamps in Jira Mode.
@@ -163,8 +163,8 @@ immediately, including when running as administrator, the likely causes are:
 Immediate user-side checks:
 
 ```powershell
-Get-FileHash .\SaySense-Setup-1.2-beta.exe -Algorithm SHA256
-Unblock-File .\SaySense-Setup-1.2-beta.exe
+Get-FileHash .\BananaPhone-Setup-1.2-beta.exe -Algorithm SHA256
+Unblock-File .\BananaPhone-Setup-1.2-beta.exe
 ```
 
 Expected SHA256 for `v1.2-beta` installer:
@@ -175,49 +175,49 @@ a45bd54e4d038c363579bdd5a6bb597402b31822a1781007a727505a885cdc6d
 
 For `v1.2-beta.1` and later, the release workflow also uploads a portable zip
 and SHA256 files. If the installer is blocked, download the portable zip,
-unblock the zip before extracting, and run `SaySense.exe` from the extracted
+unblock the zip before extracting, and run `BananaPhone.exe` from the extracted
 folder.
 
-Follow-up: the portable zip extracted correctly as `SaySense.exe` plus the
-`_internal` dependency folder, but `SaySense.exe` still did not launch after the
+Follow-up: the portable zip extracted correctly as `BananaPhone.exe` plus the
+`_internal` dependency folder, but `BananaPhone.exe` still did not launch after the
 SmartScreen bypass on the user's Windows machine. That can still be endpoint
 policy, but it can also be a hidden runtime crash because the normal PyInstaller
 build uses `--windowed`.
 
 For `v1.4-beta` and later, the Windows release workflow also uploads:
 
-- `SaySense-Debug-Console-<version>.zip`: a console PyInstaller build. Run
-  `SaySense-Debug.exe` from PowerShell to see traceback/runtime errors.
-- `SaySense-Source-<version>.zip`: source + Windows installer scripts. Extract,
-  run `Install-SaySense.bat`, then launch via the generated shortcut,
-  `Run-SaySense.bat`, or `.venv\Scripts\pythonw.exe saysense.py`.
+- `BananaPhone-Debug-Console-<version>.zip`: a console PyInstaller build. Run
+  `BananaPhone-Debug.exe` from PowerShell to see traceback/runtime errors.
+- `BananaPhone-Source-<version>.zip`: source + Windows installer scripts. Extract,
+  run `Install-BananaPhone.bat`, then launch via the generated shortcut,
+  `Run-BananaPhone.bat`, or `.venv\Scripts\pythonw.exe bananaphone.py`.
 
 Portable PyInstaller structure reminder:
 
 ```text
-SaySense.exe
+BananaPhone.exe
 _internal\
 ```
 
-`_internal` is not executable by itself; `SaySense.exe` must live beside it.
+`_internal` is not executable by itself; `BananaPhone.exe` must live beside it.
 
 ## Local Linux Quick Dictation Hotkey - 2026-06-14
 
-Goal: make SaySense usable without permanently occupying screen space on the
+Goal: make BananaPhone usable without permanently occupying screen space on the
 Linux desktop.
 
 Current desktop environment observed:
 
 - Desktop: Zorin/GNOME
 - Session type: Wayland
-- `xdotool` is installed and can see the Tk/XWayland SaySense window.
+- `xdotool` is installed and can see the Tk/XWayland BananaPhone window.
 - GNOME custom shortcut slot used: `custom3`
 
 Shortcut installed by `install.sh` when `gsettings` is available:
 
 ```text
-Name: Toggle SaySense
-Command: /home/aristofeles/.local/bin/saysense-toggle
+Name: Toggle BananaPhone
+Command: /home/aristofeles/.local/bin/bananaphone-toggle
 Binding: <Shift><Control>d
 ```
 
@@ -232,13 +232,13 @@ Binding: <Shift><Control>d
 Local wrapper installed by `install.sh`:
 
 ```text
-/home/aristofeles/.local/bin/saysense-toggle
+/home/aristofeles/.local/bin/bananaphone-toggle
 ```
 
 Wrapper behavior:
 
-- Defines the source checkout as `/home/aristofeles/ai/git/github/cascodigital/saysense`.
-- Defines the app entrypoint as `saysense.py` inside that checkout.
+- Defines the source checkout as `/home/aristofeles/ai/git/github/cascodigital/bananaphone`.
+- Defines the app entrypoint as `bananaphone.py` inside that checkout.
 - Writes a command request atomically to:
 
 ```text
@@ -251,11 +251,11 @@ Wrapper behavior:
 {"id":"<uuid-or-timestamp>","action":"toggle_quick_dictation","created_at":1781469296}
 ```
 
-- If a SaySense window exists, it tries to activate/raise it with `xdotool`.
+- If a BananaPhone window exists, it tries to activate/raise it with `xdotool`.
 - If no window exists, it launches:
 
 ```bash
-/home/aristofeles/ai/git/github/cascodigital/saysense/.venv/bin/python /home/aristofeles/ai/git/github/cascodigital/saysense/saysense.py
+/home/aristofeles/ai/git/github/cascodigital/bananaphone/.venv/bin/python /home/aristofeles/ai/git/github/cascodigital/bananaphone/bananaphone.py
 ```
 
 App-side implementation:
@@ -276,7 +276,7 @@ App-side implementation:
 Final UX:
 
 1. Press `Ctrl+Shift+D`.
-2. SaySense opens/raises and immediately starts recording.
+2. BananaPhone opens/raises and immediately starts recording.
 3. User speaks normally.
 4. Silence timeout stops recording, or pressing `Ctrl+Shift+D` again forces
    stop/transcribe.

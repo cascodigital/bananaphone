@@ -1,6 +1,6 @@
-; SaySense Windows installer (Inno Setup 6)
+; BananaPhone Windows installer (Inno Setup 6)
 ; Built by CI: ISCC.exe /DMyAppVersion=<version> packaging\installer.iss
-; Expects the PyInstaller one-folder build at dist\SaySense\
+; Expects the PyInstaller one-folder build at dist\BananaPhone\
 
 #ifndef MyAppVersion
   #define MyAppVersion "dev"
@@ -8,18 +8,18 @@
 
 [Setup]
 AppId={{4FBDCD11-6B0E-49D0-B346-14C110B7CB1F}}
-AppName=SaySense
+AppName=BananaPhone
 AppVersion={#MyAppVersion}
 AppPublisher=Casco Digital
-AppPublisherURL=https://github.com/cascodigital/saysense
-DefaultDirName={autopf}\SaySense
-DefaultGroupName=SaySense
+AppPublisherURL=https://github.com/cascodigital/bananaphone
+DefaultDirName={autopf}\BananaPhone
+DefaultGroupName=BananaPhone
 DisableProgramGroupPage=yes
 PrivilegesRequired=lowest
 OutputDir=Output
-OutputBaseFilename=SaySense-Setup-{#MyAppVersion}
+OutputBaseFilename=BananaPhone-Setup-{#MyAppVersion}
 SetupIconFile=..\assets\bananaphone.ico
-UninstallDisplayIcon={app}\SaySense.exe
+UninstallDisplayIcon={app}\BananaPhone.exe
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
@@ -29,11 +29,11 @@ ArchitecturesInstallIn64BitMode=x64compatible
 Name: "desktopicon"; Description: "Create a &desktop icon"; GroupDescription: "Additional icons:"; Flags: unchecked
 
 [Files]
-Source: "..\dist\SaySense\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "..\dist\BananaPhone\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
-Name: "{group}\SaySense"; Filename: "{app}\SaySense.exe"
-Name: "{autodesktop}\SaySense"; Filename: "{app}\SaySense.exe"; Tasks: desktopicon
+Name: "{group}\BananaPhone"; Filename: "{app}\BananaPhone.exe"
+Name: "{autodesktop}\BananaPhone"; Filename: "{app}\BananaPhone.exe"; Tasks: desktopicon
 
 [Run]
-Filename: "{app}\SaySense.exe"; Description: "Launch SaySense"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\BananaPhone.exe"; Description: "Launch BananaPhone"; Flags: nowait postinstall skipifsilent

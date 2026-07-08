@@ -1,4 +1,4 @@
-# SaySense on Windows
+# BananaPhone on Windows
 
 Same engine as Linux: PyAudio capture, local `faster-whisper` transcription or
 cloud `API` mode via OpenAI, plus `JIRA MODE`. The UI is CustomTkinter (dark,
@@ -10,19 +10,19 @@ Needs Python 3.10+ installed first (python.org, tick "Add python.exe to PATH").
 
 Then pick one:
 
-- **Easiest:** double-click **`Install-SaySense.bat`**. Done.
+- **Easiest:** double-click **`Install-BananaPhone.bat`**. Done.
   (A `.ps1` cannot be run by double-click and is blocked by the execution
   policy — the `.bat` handles both for you. It only bypasses the policy for
   that one run; it does not change any system setting.)
 - **Right-click:** right-click `install_windows.ps1` → *Run with PowerShell*.
 - **Manual (PowerShell):**
   ```powershell
-  cd path\to\saysense
+  cd path\to\bananaphone
   Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
   .\install_windows.ps1
   ```
 
-All three create the venv, install dependencies, and put a **SaySense**
+All three create the venv, install dependencies, and put a **BananaPhone**
 shortcut on your Desktop and Start Menu. Double-click the shortcut to run.
 Set the OpenAI key later inside the app's **Settings** (or use `-PromptForKey`,
 see below).
@@ -44,7 +44,7 @@ Requires Python 3.10+ from [python.org](https://www.python.org/downloads/) with
 In PowerShell:
 
 ```powershell
-cd path\to\saysense
+cd path\to\bananaphone
 Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 .\install_windows.ps1
 ```
@@ -52,8 +52,8 @@ Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 The installer creates:
 
 - `.venv` with all dependencies (including `customtkinter`)
-- a **Desktop** shortcut `SaySense.lnk`
-- a **Start Menu** shortcut under `SaySense`
+- a **Desktop** shortcut `BananaPhone.lnk`
+- a **Start Menu** shortcut under `BananaPhone`
 - shortcuts target `pythonw.exe` so there is **no black console window**
 
 Then just double-click the Desktop shortcut.
@@ -91,13 +91,13 @@ File format:
 ### Run without the shortcut
 
 ```powershell
-.\.venv\Scripts\pythonw.exe .\saysense.py
+.\.venv\Scripts\pythonw.exe .\bananaphone.py
 ```
 
 ### Update
 
 ```powershell
-cd path\to\saysense
+cd path\to\bananaphone
 git pull
 .\install_windows.ps1
 ```
@@ -113,7 +113,7 @@ The build must run **on Windows** (a Windows `.exe` cannot be cross-compiled
 from Linux).
 
 ```powershell
-cd path\to\saysense
+cd path\to\bananaphone
 Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 .\install_windows.ps1          # if you have not set up the venv yet
 .\build_windows_exe.ps1        # one-folder build (recommended)
@@ -121,8 +121,8 @@ Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 
 Output:
 
-- one-folder: `dist\SaySense\SaySense.exe` — zip the whole `SaySense` folder to share it
-- one-file (`.\build_windows_exe.ps1 -OneFile`): `dist\SaySense.exe` — a single file, slower first launch
+- one-folder: `dist\BananaPhone\BananaPhone.exe` — zip the whole `BananaPhone` folder to share it
+- one-file (`.\build_windows_exe.ps1 -OneFile`): `dist\BananaPhone.exe` — a single file, slower first launch
 
 The build bundles `customtkinter`, `faster-whisper`, `ctranslate2` and `av`.
 Local Whisper models (`small` / `medium`) are still downloaded on first use into
@@ -134,12 +134,12 @@ provider, so it needs an OpenAI or Gemini key but no local model download.
 ## Settings and logs (Windows paths)
 
 - settings: `%USERPROFILE%\.config\bananafone\settings_v2.json`
-- log: `%USERPROFILE%\.local\state\bananafone\saysense.log`
+- log: `%USERPROFILE%\.local\state\bananafone\bananaphone.log`
 
 ## Notes
 
 - Clipboard uses native PowerShell `Set-Clipboard`.
-- `Ctrl+Shift+D` toggles quick dictation globally while SaySense is running:
+- `Ctrl+Shift+D` toggles quick dictation globally while BananaPhone is running:
   press once to start, press again to stop/transcribe. If global hooking is
   blocked by Windows policy, the same shortcut still works while the window is
   focused.
@@ -150,18 +150,18 @@ provider, so it needs an OpenAI or Gemini key but no local model download.
   history. Defender may have blocked the unsigned PyInstaller/Inno package
   before SmartScreen can show `Run anyway`.
 - If the installer is blocked, download the portable zip from the same release,
-  run `Unblock-File` on the zip before extracting, then launch `SaySense.exe`
+  run `Unblock-File` on the zip before extracting, then launch `BananaPhone.exe`
   from the extracted folder.
-- In the portable PyInstaller zip, `SaySense.exe` must be beside the `_internal`
+- In the portable PyInstaller zip, `BananaPhone.exe` must be beside the `_internal`
   folder. `_internal` is only the bundled dependency folder; do not run anything
   from inside it.
-- If `SaySense.exe` silently exits after SmartScreen, use the debug console zip
-  from `v1.3-beta` or later and run `SaySense-Debug.exe` from PowerShell so
+- If `BananaPhone.exe` silently exits after SmartScreen, use the debug console zip
+  from `v1.3-beta` or later and run `BananaPhone-Debug.exe` from PowerShell so
   Python/PyInstaller errors stay visible.
 - If company policy blocks bundled executables, use the source zip from
-  `v1.3-beta` or later. Extract it, run `Install-SaySense.bat`, then start the
-  app through the generated shortcut, `Run-SaySense.bat`, or with
-  `.venv\Scripts\pythonw.exe saysense.py`.
+  `v1.3-beta` or later. Extract it, run `Install-BananaPhone.bat`, then start the
+  app through the generated shortcut, `Run-BananaPhone.bat`, or with
+  `.venv\Scripts\pythonw.exe bananaphone.py`.
 - If `PyAudio` fails to install, update Python/pip first. On modern Windows with
   Python 3.10+ it normally installs from a wheel.
 - For personal use you may keep an `install_windows_private.ps1` with an embedded

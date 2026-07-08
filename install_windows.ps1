@@ -1,4 +1,4 @@
-# SaySense - Windows installer
+# BananaPhone - Windows installer
 #
 # Self-contained: if Python is missing it installs it (winget, with a
 # python.org fallback), then bootstraps a local venv, installs every
@@ -12,7 +12,7 @@
 #   .\install_windows.ps1 -OpenAIKey "sk-..."
 #   .\install_windows.ps1 -WithOllama        # also install Ollama + pull model
 #
-# Easiest path: just double-click Install-SaySense.bat (handles ExecutionPolicy).
+# Easiest path: just double-click Install-BananaPhone.bat (handles ExecutionPolicy).
 
 param(
     [string]$OpenAIKey = "",
@@ -26,10 +26,10 @@ $ProjectDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $VenvDir = Join-Path $ProjectDir ".venv"
 $Python = Join-Path $VenvDir "Scripts\python.exe"
 $Pythonw = Join-Path $VenvDir "Scripts\pythonw.exe"
-$AppScript = Join-Path $ProjectDir "saysense.py"
-$DesktopShortcut = Join-Path ([Environment]::GetFolderPath("Desktop")) "SaySense.lnk"
-$StartMenuDir = Join-Path ([Environment]::GetFolderPath("Programs")) "SaySense"
-$StartMenuShortcut = Join-Path $StartMenuDir "SaySense.lnk"
+$AppScript = Join-Path $ProjectDir "bananaphone.py"
+$DesktopShortcut = Join-Path ([Environment]::GetFolderPath("Desktop")) "BananaPhone.lnk"
+$StartMenuDir = Join-Path ([Environment]::GetFolderPath("Programs")) "BananaPhone"
+$StartMenuShortcut = Join-Path $StartMenuDir "BananaPhone.lnk"
 $ConfigDir = Join-Path $env:USERPROFILE ".config\bananafone"
 $KeyFile = Join-Path $ConfigDir "ai-keys.md"
 
@@ -118,7 +118,7 @@ if ($WithOllama) {
         }
     }
     if (Get-Command ollama -ErrorAction SilentlyContinue) {
-        # Must match the app default (PROVIDER_DEFAULT_MODEL in saysense.py) or
+        # Must match the app default (PROVIDER_DEFAULT_MODEL in bananaphone.py) or
         # the app 404s on a model that was never pulled.
         Write-Host "Pulling default local model qwen2.5:7b (~4.7 GB)..."
         ollama pull qwen2.5:7b
@@ -139,7 +139,7 @@ function New-AppShortcut($Path) {
     $Shortcut.Arguments = "`"$AppScript`""
     $Shortcut.WorkingDirectory = $ProjectDir
     $Shortcut.IconLocation = "$env:SystemRoot\System32\SHELL32.dll,220"
-    $Shortcut.Description = "SaySense - dictation and Jira documentation"
+    $Shortcut.Description = "BananaPhone - dictation and Jira documentation"
     $Shortcut.Save()
 }
 
@@ -148,7 +148,7 @@ New-Item -ItemType Directory -Force -Path $StartMenuDir | Out-Null
 New-AppShortcut $StartMenuShortcut
 
 Write-Host ""
-Write-Host "SaySense installed." -ForegroundColor Green
+Write-Host "BananaPhone installed." -ForegroundColor Green
 Write-Host "Desktop shortcut : $DesktopShortcut"
 Write-Host "Start Menu       : $StartMenuShortcut"
 Write-Host "Launcher         : $LauncherTarget `"$AppScript`""

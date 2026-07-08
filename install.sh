@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# SaySense - Linux installer
+# BananaPhone - Linux installer
 #
 # Installs EVERYTHING the app needs on a clean machine:
 #   - system packages: python3 + venv, tkinter, PortAudio + build headers
@@ -19,9 +19,9 @@ set -euo pipefail
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 VENV_DIR="$REPO_DIR/.venv"
 DESKTOP_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/applications"
-DESKTOP_FILE="$DESKTOP_DIR/saysense.desktop"
+DESKTOP_FILE="$DESKTOP_DIR/bananaphone.desktop"
 BIN_DIR="$HOME/.local/bin"
-TOGGLE_SCRIPT="$BIN_DIR/saysense-toggle"
+TOGGLE_SCRIPT="$BIN_DIR/bananaphone-toggle"
 
 WITH_OLLAMA=0
 for arg in "$@"; do
@@ -81,7 +81,7 @@ install_ollama() {
     ok "Ollama installed."
   fi
   # Must match the app's default Ollama model (PROVIDER_DEFAULT_MODEL in
-  # saysense.py); otherwise the app requests a model that was never pulled and
+  # bananaphone.py); otherwise the app requests a model that was never pulled and
   # the local endpoint returns 404 model-not-found.
   log "Pulling default local model qwen2.5:7b (~4.7 GB)..."
   ollama pull qwen2.5:7b || log "Pull skipped/failed — you can do it later from the app's Settings."
@@ -116,15 +116,15 @@ fi
 
 # --- desktop launcher ------------------------------------------------------
 mkdir -p "$DESKTOP_DIR"
-rm -f "$DESKTOP_DIR/bananaphone-v2.desktop"
+rm -f "$DESKTOP_DIR/bananaphone-v2.desktop" "$DESKTOP_DIR/saysense.desktop" "$BIN_DIR/saysense-toggle"
 cat > "$DESKTOP_FILE" <<EOF
 [Desktop Entry]
 Version=2.1
-Name=SaySense
+Name=BananaPhone
 Comment=Dictation and Jira documentation (local + API)
-Exec=$VENV_DIR/bin/python $REPO_DIR/saysense.py
+Exec=$VENV_DIR/bin/python $REPO_DIR/bananaphone.py
 Icon=$REPO_DIR/assets/bananaphone-256.png
-StartupWMClass=Saysense
+StartupWMClass=Bananaphone
 Terminal=false
 Type=Application
 Categories=Utility;AudioVideo;Audio;
@@ -139,7 +139,7 @@ set -euo pipefail
 
 APP_DIR="$REPO_DIR"
 PYTHON="$VENV_DIR/bin/python"
-APP="\$APP_DIR/saysense.py"
+APP="\$APP_DIR/bananaphone.py"
 CONFIG_DIR="\$HOME/.config/bananafone"
 COMMAND_FILE="\$CONFIG_DIR/command.json"
 
@@ -168,7 +168,7 @@ pick_window() {
     while read -r win; do
       [[ -n "\$win" ]] || continue
       name="\$(xdotool getwindowname "\$win" 2>/dev/null || true)"
-      if [[ "\$name" == SaySense* ]]; then
+      if [[ "\$name" == BananaPhone* ]]; then
         printf '%s\n' "\$win"
         return 0
       fi
@@ -178,11 +178,11 @@ pick_window() {
   while read -r win; do
     [[ -n "\$win" ]] || continue
     name="\$(xdotool getwindowname "\$win" 2>/dev/null || true)"
-    if [[ "\$name" == SaySense* ]]; then
+    if [[ "\$name" == BananaPhone* ]]; then
       printf '%s\n' "\$win"
       return 0
     fi
-  done < <(xdotool search --name '^SaySense' 2>/dev/null || true)
+  done < <(xdotool search --name '^BananaPhone' 2>/dev/null || true)
 }
 
 send_record_command
@@ -252,7 +252,7 @@ PY
     fi
   fi
 
-  gsettings set "$schema.custom-keybinding:$path" name "Toggle SaySense"
+  gsettings set "$schema.custom-keybinding:$path" name "Toggle BananaPhone"
   gsettings set "$schema.custom-keybinding:$path" command "$TOGGLE_SCRIPT"
   gsettings set "$schema.custom-keybinding:$path" binding "<Shift><Control>d"
 }
@@ -260,9 +260,9 @@ PY
 install_gnome_hotkey || log "GNOME hotkey setup skipped/failed; run $TOGGLE_SCRIPT manually or bind it to Ctrl+Shift+D."
 
 echo
-ok "SaySense installed."
+ok "BananaPhone installed."
 echo "  Launcher : $DESKTOP_FILE"
-echo "  Run      : $VENV_DIR/bin/python $REPO_DIR/saysense.py"
+echo "  Run      : $VENV_DIR/bin/python $REPO_DIR/bananaphone.py"
 echo "  Hotkey   : Ctrl+Shift+D -> $TOGGLE_SCRIPT"
 if [[ "$WITH_OLLAMA" -ne 1 ]]; then
   echo "  Local LLM: not installed. Re-run with --with-ollama, or install from Settings."

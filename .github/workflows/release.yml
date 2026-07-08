@@ -29,7 +29,7 @@ jobs:
       - name: Build standalone app (PyInstaller)
         run: >
           pyinstaller --noconfirm --clean --windowed --onedir
-          --name SaySense
+          --name BananaPhone
           --icon assets/bananaphone.ico
           --add-data "assets;assets"
           --collect-all customtkinter
@@ -37,7 +37,7 @@ jobs:
           --collect-all ctranslate2
           --collect-all av
           --hidden-import tokenizers
-          saysense.py
+          bananaphone.py
 
       - name: Install Inno Setup
         run: choco install innosetup -y --no-progress
@@ -47,9 +47,9 @@ jobs:
         run: |
           $version = "${{ github.ref_name }}".TrimStart("v")
           & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" /DMyAppVersion=$version packaging\installer.iss
-          Compress-Archive -Path dist\SaySense\* -DestinationPath "SaySense-Portable-$version.zip" -Force
+          Compress-Archive -Path dist\BananaPhone\* -DestinationPath "BananaPhone-Portable-$version.zip" -Force
           pyinstaller --noconfirm --clean --console --onedir `
-            --name SaySense-Debug `
+            --name BananaPhone-Debug `
             --icon assets/bananaphone.ico `
             --add-data "assets;assets" `
             --collect-all customtkinter `
@@ -57,37 +57,37 @@ jobs:
             --collect-all ctranslate2 `
             --collect-all av `
             --hidden-import tokenizers `
-            saysense.py
-          Compress-Archive -Path dist\SaySense-Debug\* -DestinationPath "SaySense-Debug-Console-$version.zip" -Force
-          $sourceRoot = "SaySense-Source-$version"
+            bananaphone.py
+          Compress-Archive -Path dist\BananaPhone-Debug\* -DestinationPath "BananaPhone-Debug-Console-$version.zip" -Force
+          $sourceRoot = "BananaPhone-Source-$version"
           New-Item -ItemType Directory -Force -Path $sourceRoot | Out-Null
-          Copy-Item saysense.py,requirements.txt,install_windows.ps1,Install-SaySense.bat,Run-SaySense.bat,README_WINDOWS.md,LICENSE -Destination $sourceRoot
+          Copy-Item bananaphone.py,requirements.txt,install_windows.ps1,Install-BananaPhone.bat,Run-BananaPhone.bat,README_WINDOWS.md,LICENSE -Destination $sourceRoot
           Copy-Item assets -Destination $sourceRoot -Recurse
           Copy-Item docs -Destination $sourceRoot -Recurse
-          Compress-Archive -Path "$sourceRoot\*" -DestinationPath "SaySense-Source-$version.zip" -Force
-          Get-FileHash "packaging\Output\SaySense-Setup-$version.exe" -Algorithm SHA256 |
-            ForEach-Object { "$($_.Hash.ToLower())  SaySense-Setup-$version.exe" } |
-            Set-Content "SaySense-Setup-$version.exe.sha256"
-          Get-FileHash "SaySense-Portable-$version.zip" -Algorithm SHA256 |
-            ForEach-Object { "$($_.Hash.ToLower())  SaySense-Portable-$version.zip" } |
-            Set-Content "SaySense-Portable-$version.zip.sha256"
-          Get-FileHash "SaySense-Debug-Console-$version.zip" -Algorithm SHA256 |
-            ForEach-Object { "$($_.Hash.ToLower())  SaySense-Debug-Console-$version.zip" } |
-            Set-Content "SaySense-Debug-Console-$version.zip.sha256"
-          Get-FileHash "SaySense-Source-$version.zip" -Algorithm SHA256 |
-            ForEach-Object { "$($_.Hash.ToLower())  SaySense-Source-$version.zip" } |
-            Set-Content "SaySense-Source-$version.zip.sha256"
+          Compress-Archive -Path "$sourceRoot\*" -DestinationPath "BananaPhone-Source-$version.zip" -Force
+          Get-FileHash "packaging\Output\BananaPhone-Setup-$version.exe" -Algorithm SHA256 |
+            ForEach-Object { "$($_.Hash.ToLower())  BananaPhone-Setup-$version.exe" } |
+            Set-Content "BananaPhone-Setup-$version.exe.sha256"
+          Get-FileHash "BananaPhone-Portable-$version.zip" -Algorithm SHA256 |
+            ForEach-Object { "$($_.Hash.ToLower())  BananaPhone-Portable-$version.zip" } |
+            Set-Content "BananaPhone-Portable-$version.zip.sha256"
+          Get-FileHash "BananaPhone-Debug-Console-$version.zip" -Algorithm SHA256 |
+            ForEach-Object { "$($_.Hash.ToLower())  BananaPhone-Debug-Console-$version.zip" } |
+            Set-Content "BananaPhone-Debug-Console-$version.zip.sha256"
+          Get-FileHash "BananaPhone-Source-$version.zip" -Algorithm SHA256 |
+            ForEach-Object { "$($_.Hash.ToLower())  BananaPhone-Source-$version.zip" } |
+            Set-Content "BananaPhone-Source-$version.zip.sha256"
 
       - name: Upload to release
         uses: softprops/action-gh-release@v2
         with:
           prerelease: ${{ contains(github.ref_name, 'beta') }}
           files: |
-            packaging/Output/SaySense-Setup-*.exe
-            SaySense-Portable-*.zip
-            SaySense-Debug-Console-*.zip
-            SaySense-Source-*.zip
-            SaySense-*.sha256
+            packaging/Output/BananaPhone-Setup-*.exe
+            BananaPhone-Portable-*.zip
+            BananaPhone-Debug-Console-*.zip
+            BananaPhone-Source-*.zip
+            BananaPhone-*.sha256
 
   linux-appimage:
     runs-on: ubuntu-22.04
@@ -111,25 +111,25 @@ jobs:
       - name: Build standalone app (PyInstaller)
         run: >
           pyinstaller --noconfirm --clean --windowed --onedir
-          --name SaySense
+          --name BananaPhone
           --add-data "assets:assets"
           --collect-all customtkinter
           --collect-all faster_whisper
           --collect-all ctranslate2
           --collect-all av
           --hidden-import tokenizers
-          saysense.py
+          bananaphone.py
 
       - name: Assemble AppDir
         run: |
           mkdir -p AppDir/usr/bin
-          cp -r dist/SaySense/* AppDir/usr/bin/
-          cp packaging/saysense.desktop AppDir/
-          cp assets/bananaphone-256.png AppDir/saysense.png
+          cp -r dist/BananaPhone/* AppDir/usr/bin/
+          cp packaging/bananaphone.desktop AppDir/
+          cp assets/bananaphone-256.png AppDir/bananaphone.png
           cat > AppDir/AppRun <<'EOF'
           #!/bin/sh
           HERE="$(dirname "$(readlink -f "$0")")"
-          exec "$HERE/usr/bin/SaySense" "$@"
+          exec "$HERE/usr/bin/BananaPhone" "$@"
           EOF
           chmod +x AppDir/AppRun
 
@@ -138,13 +138,13 @@ jobs:
           version="${GITHUB_REF_NAME#v}"
           wget -q https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage
           chmod +x appimagetool-x86_64.AppImage
-          ARCH=x86_64 ./appimagetool-x86_64.AppImage AppDir "SaySense-${version}-x86_64.AppImage"
-          sha256sum "SaySense-${version}-x86_64.AppImage" > "SaySense-${version}-x86_64.AppImage.sha256"
+          ARCH=x86_64 ./appimagetool-x86_64.AppImage AppDir "BananaPhone-${version}-x86_64.AppImage"
+          sha256sum "BananaPhone-${version}-x86_64.AppImage" > "BananaPhone-${version}-x86_64.AppImage.sha256"
 
       - name: Upload to release
         uses: softprops/action-gh-release@v2
         with:
           prerelease: ${{ contains(github.ref_name, 'beta') }}
           files: |
-            SaySense-*-x86_64.AppImage
-            SaySense-*-x86_64.AppImage.sha256
+            BananaPhone-*-x86_64.AppImage
+            BananaPhone-*-x86_64.AppImage.sha256
