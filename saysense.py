@@ -34,7 +34,7 @@ except Exception:
     pynput_keyboard = None
 
 APP_NAME = "SaySense"
-APP_VERSION = "2.2.4"
+APP_VERSION = "2.2.5"
 APP_TITLE = f"{APP_NAME} {APP_VERSION}"
 
 # --- Self-update (GitHub Releases) -----------------------------------------
@@ -1100,12 +1100,21 @@ class DictationApp:
 
     def set_window_icon(self):
         base = getattr(sys, "_MEIPASS", os.path.dirname(os.path.abspath(__file__)))
-        icon_path = os.path.join(base, "assets", "bananaphone-256.png")
         try:
-            self._icon_image = tk.PhotoImage(file=icon_path)
-            self.root.iconphoto(True, self._icon_image)
+            if sys.platform == "win32":
+                # Own taskbar identity instead of grouping under python/pythonw.
+                import ctypes
+                ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("CascoDigital.SaySense")
+                ico_path = os.path.join(base, "assets", "bananaphone.ico")
+                self.root.iconbitmap(default=ico_path)
+                # CustomTkinter re-applies its own icon ~200ms after startup; beat it.
+                self.root.after(400, lambda: self.root.iconbitmap(default=ico_path))
+            else:
+                icon_path = os.path.join(base, "assets", "bananaphone-256.png")
+                self._icon_image = tk.PhotoImage(file=icon_path)
+                self.root.iconphoto(True, self._icon_image)
         except Exception:
-            self.log_exception(f"window icon not loaded: {icon_path}")
+            self.log_exception("window icon not loaded")
 
     def setup_bindings(self):
         self.root.bind_all("<Control-Shift-d>", self.on_quick_hotkey)
