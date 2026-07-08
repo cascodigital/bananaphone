@@ -1,11 +1,12 @@
 <div align="center">
 
-# BananaPhone
+# 🍌 BananaPhone
 
-**You speak. It makes sense.**
+**Primate talks. I make sense.**
 
-Dictate in Portuguese, Spanish or English — get clean, professional text in the language you need, already on your clipboard.
-Built for IT support: turn spoken case notes into ticket-ready Jira documentation in one click — and keep every word on your own machine if you want to.
+You grunt case notes into a microphone in whatever language your brain runs on — Portuguese, Spanish or English — and BananaPhone hands back clean, professional text in the language your tickets demand, already on your clipboard. Evolution, but for paperwork.
+
+Built for IT support: turn spoken case notes into ticket-ready Jira documentation in one click — and keep every word on your own machine if you want to. No banana is sent to the cloud without your consent.
 
 ![Status](https://img.shields.io/badge/Status-2.3.0-16A34A?style=flat-square)
 ![License](https://img.shields.io/badge/License-MIT-2563EB?style=flat-square)
@@ -22,9 +23,9 @@ Built for IT support: turn spoken case notes into ticket-ready Jira documentatio
 
 ## The problem it kills
 
-Working tickets in a second language means living in three windows at once: a translator, a text editor, and the ticket system. You dictate or type in your head-language, paste it into a translator, clean it up, then move it into the ticket. Every. Single. Note.
+Working tickets in a second language means living in three windows at once: a translator, a text editor, and the ticket system. You dictate or type in your head-language, paste it into a translator, clean it up, then move it into the ticket. Every. Single. Note. That's not knowledge work — that's a primate moving text between trees.
 
-BananaPhone collapses that loop into one hotkey. Talk in your language; polished text lands wherever your cursor is. In **Jira Mode** it goes further — dictate rough notes during the call, then generate a customer-facing reply *and* an internal worklog from all of them at once.
+BananaPhone collapses that loop into one hotkey. Talk in your language; polished text lands wherever your cursor is. In **Jira Mode** it goes further — dictate rough notes during the call, then generate a customer-facing reply *and* an internal worklog from all of them at once. You handle the monkey business; it handles the sense-making.
 
 ---
 
@@ -196,7 +197,7 @@ No key is required for the Ollama path — the app can install Ollama and pull t
 
 ## Support
 
-BananaPhone is free and MIT-licensed. If it saves you a few tickets' worth of typing, you can throw a coffee my way — entirely optional, never gated.
+BananaPhone is free and MIT-licensed. If it saves you a few tickets' worth of typing, you can throw a coffee (or a banana) my way — entirely optional, never gated.
 
 [![PayPal](https://img.shields.io/badge/PayPal-Buy%20me%20a%20coffee-00457C?style=flat-square&logo=paypal&logoColor=white)](https://www.paypal.com/donate/?business=andre%40kittler.com.br&item_name=Support+BananaPhone&currency_code=USD)
 
@@ -207,5 +208,5 @@ BananaPhone is free and MIT-licensed. If it saves you a few tickets' worth of ty
 MIT — see [LICENSE](LICENSE).
 
 <div align="center">
-<sub>Project lineage: BananaPhone v1 → BananaPhone v2 → <b>BananaPhone</b>. Internal storage paths remain <code>bananafone</code>-compatible for backward compatibility.</sub>
+<sub>Project lineage: BananaPhone v1 → BananaPhone v2 → a brief identity crisis as "SaySense" → <b>BananaPhone</b>, back where it belongs. 🍌<br>Internal storage paths remain <code>bananafone</code>-compatible for backward compatibility.</sub>
 </div>
