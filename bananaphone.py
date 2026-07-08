@@ -34,7 +34,7 @@ except Exception:
     pynput_keyboard = None
 
 APP_NAME = "BananaPhone"
-APP_VERSION = "2.2.6"
+APP_VERSION = "2.3.0"
 APP_TITLE = f"{APP_NAME} {APP_VERSION}"
 
 # --- Self-update (GitHub Releases) -----------------------------------------

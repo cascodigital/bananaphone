@@ -7,7 +7,7 @@
 Dictate in Portuguese, Spanish or English — get clean, professional text in the language you need, already on your clipboard.
 Built for IT support: turn spoken case notes into ticket-ready Jira documentation in one click — and keep every word on your own machine if you want to.
 
-![Status](https://img.shields.io/badge/Status-2.2.1-16A34A?style=flat-square)
+![Status](https://img.shields.io/badge/Status-2.3.0-16A34A?style=flat-square)
 ![License](https://img.shields.io/badge/License-MIT-2563EB?style=flat-square)
 ![Casco Digital](https://img.shields.io/badge/Casco-Digital-111827?style=flat-square)
 ![Platforms](https://img.shields.io/badge/Windows%20%7C%20Linux-supported-success?style=flat-square)
@@ -101,6 +101,12 @@ Most dictation tools ship your microphone to someone else's server. BananaPhone 
 Pick the **Ollama + local Whisper** path and *nothing* leaves the machine: audio is transcribed locally with `faster-whisper`, and translation/Jira text runs on a local LLM. No keys, no cloud, no audit trail. Perfect for ticket content you can't legally send to a third party. Prefer speed and top-tier quality? Switch to OpenAI or Gemini in one dropdown. Your call, every time.
 
 ---
+
+## ✨ New in 2.3
+
+- **BananaPhone is back** 🍌 — the app returns to its original name, everywhere: window, taskbar, installer, launchers. Same app, same settings, same update path — upgrades install right over SaySense 2.2.x.
+- **History you can actually use** — click any entry in the History tab to select it; **Reopen**, **Copy Customer** and **Copy Internal** now act on the selected ticket, not just the latest one.
+- **A face in the crowd** — proper banana icon in the title bar, taskbar and dock on both Windows and Linux, instead of the generic Python/Tk placeholder.
 
 ## ✨ New in 2.2.1
 
