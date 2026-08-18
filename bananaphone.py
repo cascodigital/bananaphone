@@ -9,6 +9,7 @@ import ssl
 import subprocess
 import threading
 import time
+import unicodedata
 import sys
 import tkinter as tk
 import webbrowser
@@ -34,7 +35,7 @@ except Exception:
     pynput_keyboard = None
 
 APP_NAME = "BananaPhone"
-APP_VERSION = "2.3.0"
+APP_VERSION = "2.4.0"
 APP_TITLE = f"{APP_NAME} {APP_VERSION}"
 
 # --- Self-update (GitHub Releases) -----------------------------------------
@@ -297,6 +298,42 @@ LOCAL_MODEL_TIER_BY_LABEL = {t["label"]: t for t in LOCAL_MODEL_TIERS}
 DEFAULT_LOCAL_MODEL_TIER = "balanced"
 
 
+def normalize_trigger_text(text):
+    """Lowercase, de-accent and drop punctuation so trigger matching survives
+    however the STT decided to spell/punctuate the phrase."""
+    folded = unicodedata.normalize("NFKD", text or "")
+    folded = "".join(ch for ch in folded if not unicodedata.combining(ch))
+    folded = re.sub(r"[^a-z0-9\s]", " ", folded.lower())
+    return re.sub(r"\s+", " ", folded).strip()
+
+
+def parse_trigger_phrases(raw):
+    phrases = []
+    for chunk in re.split(r"[,;\n]", raw or ""):
+        phrase = normalize_trigger_text(chunk)
+        if phrase:
+            phrases.append(phrase)
+    return phrases
+
+
+def split_trigger_phrase(text, phrases):
+    """Return (text_without_trigger, matched).
+
+    Only the tail of the dictation is honored, so quoting the phrase in the
+    middle of a sentence does not fire it. The trailing words are dropped from
+    the ORIGINAL string, keeping its casing and punctuation intact.
+    """
+    normalized = normalize_trigger_text(text)
+    if not normalized or not phrases:
+        return text, False
+    for phrase in phrases:
+        if normalized == phrase or normalized.endswith(" " + phrase):
+            words = len(phrase.split())
+            kept = re.split(r"\s+", text.strip())[:-words]
+            return " ".join(kept).strip(" ,.;:-\u2014"), True
+    return text, False
+
+
 def detect_local_gpu():
     """Best-effort NVIDIA/AMD probe on THIS machine (Mac intentionally unsupported).
 
@@ -366,6 +403,13 @@ BUILTIN_JIRA_PROFILES = [
                  "what the dictation states.",
     },
 ]
+# Dictate -> Jira voice trigger. Closing a plain dictation with one of these
+# phrases promotes the transcript into Jira Mode and generates it, so a hidden
+# window / hotkey dictation never needs the keyboard back.
+DEFAULT_DICTATE_JIRA_TRIGGERS = (
+    "banana jira, gera o jira, gerar o jira, generate jira, make it a ticket"
+)
+
 JIRA_HISTORY_LIMIT = 10
 REGENERATE_CHOICES = {
     "Standard (Default)": "",
@@ -525,6 +569,10 @@ class DictationApp:
         self.default_output_target = self.settings.get("default_output", "en")
         self.default_jira_mode = self.settings.get("default_jira_mode", False)
         self.jira_auto_generate = self.settings.get("jira_auto_generate", False)
+        self.dictate_jira_trigger_enabled = self.settings.get("dictate_jira_trigger", True)
+        self.dictate_jira_trigger_phrases = self.settings.get(
+            "dictate_jira_trigger_phrases", DEFAULT_DICTATE_JIRA_TRIGGERS
+        )
         self.silence_timeout_setting = self.settings.get("silence_timeout", DEFAULT_SILENCE_TIMEOUT)
         self.configured_api_key = self.settings.get("api_key", "")
         self.configured_gemini_key = self.settings.get("gemini_api_key", "")
@@ -752,6 +800,18 @@ class DictationApp:
             command=self.copy_transcript,
         )
         self.copy_transcript_button.pack(side=tk.RIGHT)
+        self.send_to_jira_button = ctk.CTkButton(
+            self.transcript_actions_frame,
+            text="\u2192 JIRA",
+            width=80,
+            font=ctk.CTkFont(size=11, weight="bold"),
+            height=28,
+            corner_radius=8,
+            fg_color=BTN_PRIMARY,
+            hover_color=BTN_PRIMARY_HOVER,
+            command=self.promote_transcript_to_jira,
+        )
+        self.send_to_jira_button.pack(side=tk.LEFT)
         self.result_text = self._build_panel_textbox(self.transcript_tab)
         self.edit_transcript_button = ctk.CTkButton(
             self.transcript_actions_frame,
@@ -1119,19 +1179,38 @@ class DictationApp:
     def setup_bindings(self):
         self.root.bind_all("<Control-Shift-d>", self.on_quick_hotkey)
         self.root.bind_all("<Control-Shift-D>", self.on_quick_hotkey)
+        self.root.bind_all("<Control-Shift-j>", self.on_promote_hotkey)
+        self.root.bind_all("<Control-Shift-J>", self.on_promote_hotkey)
 
     def start_global_hotkey_listener(self):
         if pynput_keyboard is None:
             return
 
         try:
-            hotkey = pynput_keyboard.HotKey(
-                pynput_keyboard.HotKey.parse("<ctrl>+<shift>+d"),
-                lambda: self.root.after(0, self.start_hotkey_recording_command),
-            )
+            hotkeys = [
+                pynput_keyboard.HotKey(
+                    pynput_keyboard.HotKey.parse("<ctrl>+<shift>+d"),
+                    lambda: self.root.after(0, self.start_hotkey_recording_command),
+                ),
+                pynput_keyboard.HotKey(
+                    pynput_keyboard.HotKey.parse("<ctrl>+<shift>+j"),
+                    lambda: self.root.after(0, self.promote_transcript_to_jira),
+                ),
+            ]
+
+            def on_press(key):
+                canonical = listener.canonical(key)
+                for hotkey in hotkeys:
+                    hotkey.press(canonical)
+
+            def on_release(key):
+                canonical = listener.canonical(key)
+                for hotkey in hotkeys:
+                    hotkey.release(canonical)
+
             listener = pynput_keyboard.Listener(
-                on_press=lambda key: hotkey.press(listener.canonical(key)),
-                on_release=lambda key: hotkey.release(listener.canonical(key)),
+                on_press=on_press,
+                on_release=on_release,
             )
             listener.daemon = True
             listener.start()
@@ -1388,6 +1467,65 @@ class DictationApp:
         self.jira_raw_notes.append(note)
         self.refresh_raw_notes_text()
         self.jira_tabs.set("Raw Notes")
+
+    def active_trigger_phrases(self):
+        return parse_trigger_phrases(
+            self.dictate_jira_trigger_phrases or DEFAULT_DICTATE_JIRA_TRIGGERS
+        )
+
+    def on_promote_hotkey(self, _event=None):
+        self.promote_transcript_to_jira()
+        return "break"
+
+    def promote_transcript_to_jira(self, text=None, generate=True, attempts=60):
+        """Turn the dictation already on screen into a Jira ticket.
+
+        Source of truth is the Transcript box, so manual edits ride along. Used
+        by the "-> JIRA" button, Ctrl+Shift+J and the spoken trigger phrase.
+        """
+        if self.is_recording or self.refreshing_models or self.generating_jira:
+            return
+        if text is None:
+            if self.jira_mode:
+                self.update_status("Already in Jira Mode - use Generate.", COLOR_WARN)
+                return
+            text = self.result_text.get("1.0", "end")
+        note = (text or "").strip()
+        if not note:
+            self.update_status("Nothing in the transcript to send to Jira.", COLOR_WARN)
+            return
+        if not self.jira_mode:
+            if self.model_loading:
+                # A speech model is still loading (startup, or a mode switch):
+                # set_jira_mode would refuse. Queue instead of dropping it.
+                if attempts > 0:
+                    self.update_status("Loading speech mode - Jira queued...", COLOR_INFO)
+                    self.root.after(
+                        300,
+                        lambda: self.promote_transcript_to_jira(note, generate, attempts - 1),
+                    )
+                else:
+                    self.update_status("Busy - can't switch to Jira Mode right now.", COLOR_WARN)
+                return
+            # set_jira_mode clears leftover notes on a fresh entry, so the note
+            # has to be added after the switch.
+            self.set_jira_mode(True)
+            if not self.jira_mode:
+                self.update_status("Busy - can't switch to Jira Mode right now.", COLOR_WARN)
+                return
+        self.add_jira_note(note)
+        self.update_status("Transcript sent to Jira notes.", COLOR_INFO)
+        if generate:
+            self.generate_jira_when_ready()
+
+    def generate_jira_when_ready(self, attempts=60):
+        # Switching modes can kick off a speech-model load, and
+        # generate_jira_from_notes refuses to run while that is in flight.
+        # Wait it out instead of silently dropping the request.
+        if self.model_loading and attempts > 0:
+            self.root.after(300, lambda: self.generate_jira_when_ready(attempts - 1))
+            return
+        self.generate_jira_from_notes()
 
     def generate_jira_from_notes(self, style_instruction=None):
         if self.is_recording or self.model_loading or self.refreshing_models or self.generating_jira:
@@ -1663,6 +1801,10 @@ class DictationApp:
         default_output = settings.get("default_output", "en")
         default_jira_mode = bool(settings.get("default_jira_mode", False))
         jira_auto_generate = bool(settings.get("jira_auto_generate", False))
+        dictate_jira_trigger = bool(settings.get("dictate_jira_trigger", True))
+        dictate_jira_trigger_phrases = str(
+            settings.get("dictate_jira_trigger_phrases", "") or ""
+        ).strip() or DEFAULT_DICTATE_JIRA_TRIGGERS
         if default_output == "jira":
             default_output = "en"
             default_jira_mode = True
@@ -1705,6 +1847,8 @@ class DictationApp:
             "default_output": default_output,
             "default_jira_mode": default_jira_mode,
             "jira_auto_generate": jira_auto_generate,
+            "dictate_jira_trigger": dictate_jira_trigger,
+            "dictate_jira_trigger_phrases": dictate_jira_trigger_phrases,
             "silence_timeout": silence_timeout,
             "api_key": settings.get("api_key", "").strip(),
             "gemini_api_key": str(settings.get("gemini_api_key", "")).strip(),
@@ -1728,6 +1872,8 @@ class DictationApp:
             "default_output": self.default_output_target,
             "default_jira_mode": self.default_jira_mode,
             "jira_auto_generate": self.jira_auto_generate,
+            "dictate_jira_trigger": self.dictate_jira_trigger_enabled,
+            "dictate_jira_trigger_phrases": self.dictate_jira_trigger_phrases,
             "silence_timeout": self.silence_timeout_setting,
             "api_key": self.configured_api_key,
             "gemini_api_key": self.configured_gemini_key,
@@ -2527,12 +2673,42 @@ class DictationApp:
             variable=auto_generate_var,
         ).pack(side=tk.LEFT)
 
+        trigger_var = tk.BooleanVar(value=self.dictate_jira_trigger_enabled)
+        trigger_row = ctk.CTkFrame(body, fg_color="transparent")
+        trigger_row.pack(fill=tk.X, pady=(0, 4))
+        ctk.CTkCheckBox(
+            trigger_row,
+            text="Dictate: closing phrase sends the transcript straight to Jira",
+            font=ctk.CTkFont(size=12),
+            variable=trigger_var,
+        ).pack(side=tk.LEFT)
+
+        trigger_phrases_var = tk.StringVar(value=self.dictate_jira_trigger_phrases)
+        ctk.CTkEntry(
+            body,
+            textvariable=trigger_phrases_var,
+            font=ctk.CTkFont(size=12),
+            fg_color=COLOR_FIELD,
+            border_color=COLOR_CARD_BORDER,
+            corner_radius=8,
+        ).pack(fill=tk.X, pady=(0, 2))
+        ctk.CTkLabel(
+            body,
+            text="Trigger phrases, comma separated. Also on the \u2192 JIRA button and Ctrl+Shift+J.",
+            font=ctk.CTkFont(size=11),
+            text_color=COLOR_MUTED,
+        ).pack(anchor="w", pady=(0, 16))
+
         buttons = ctk.CTkFrame(footer, fg_color="transparent")
         buttons.pack(side=tk.RIGHT)
 
         def save_settings():
             self.silence_timeout_setting = silence_var.get()
             self.jira_auto_generate = auto_generate_var.get()
+            self.dictate_jira_trigger_enabled = trigger_var.get()
+            self.dictate_jira_trigger_phrases = (
+                trigger_phrases_var.get().strip() or DEFAULT_DICTATE_JIRA_TRIGGERS
+            )
             self.configured_api_key = key_var.get().strip()
             self.configured_gemini_key = gemini_key_var.get().strip()
             self.text_provider = TEXT_PROVIDERS.get(provider_var.get(), "openai")
@@ -3184,6 +3360,14 @@ class DictationApp:
             if not text:
                 raise sr.UnknownValueError()
 
+            # Trigger is matched on the raw transcript: it is spoken in the
+            # input language, before any translation can mangle it.
+            trigger_hit = False
+            if not self.jira_mode and self.dictate_jira_trigger_enabled:
+                text, trigger_hit = split_trigger_phrase(text, self.active_trigger_phrases())
+                if trigger_hit and not text.strip():
+                    raise RuntimeError("Only the Jira trigger phrase was heard")
+
             output_text = self.transform_output_text(text)
             elapsed = time.time() - started
             if not output_text:
@@ -3192,6 +3376,8 @@ class DictationApp:
             self.copy_to_clipboard(output_text)
             if self.jira_mode:
                 result = {"raw_note": output_text}
+            elif trigger_hit:
+                result = {"dictate_jira": output_text}
             else:
                 result = output_text
             self.root.after(0, self.after_transcription_success, result, elapsed, language_probability)
@@ -3211,7 +3397,12 @@ class DictationApp:
         confidence = f"{language_probability:.2f}" if language_probability is not None else "n/a"
         source_label = self.source_language().upper()
         auto_generate = False
-        if isinstance(text, dict) and "raw_note" in text:
+        promote_text = None
+        if isinstance(text, dict) and "dictate_jira" in text:
+            promote_text = text.get("dictate_jira", "")
+            self.set_result_text(promote_text)
+            copied_label = "Trigger heard - building the Jira"
+        elif isinstance(text, dict) and "raw_note" in text:
             self.add_jira_note(text.get("raw_note", ""))
             copied_label = "Note polished & copied"
             auto_generate = self.jira_auto_generate and bool(self.jira_raw_notes)
@@ -3228,6 +3419,8 @@ class DictationApp:
             COLOR_OK,
         )
         self.hide_if_hotkey_recording()
+        if promote_text:
+            self.promote_transcript_to_jira(promote_text)
         if auto_generate:
             self.generate_jira_from_notes()
 

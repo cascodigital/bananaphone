@@ -8,7 +8,7 @@ You grunt case notes into a microphone in whatever language your brain runs on �
 
 Built for IT support: turn spoken case notes into ticket-ready Jira documentation in one click — and keep every word on your own machine if you want to. No banana is sent to the cloud without your consent.
 
-![Status](https://img.shields.io/badge/Status-2.3.0-16A34A?style=flat-square)
+![Status](https://img.shields.io/badge/Status-2.4.0-16A34A?style=flat-square)
 ![License](https://img.shields.io/badge/License-MIT-2563EB?style=flat-square)
 ![Casco Digital](https://img.shields.io/badge/Casco-Digital-111827?style=flat-square)
 ![Platforms](https://img.shields.io/badge/Windows%20%7C%20Linux-supported-success?style=flat-square)
@@ -60,6 +60,7 @@ BananaPhone collapses that loop into one hotkey. Talk in your language; polished
 - 🎙️ **Press-to-talk dictation** — hold the button (or the global hotkey `Ctrl+Shift+D`), speak, and it auto-stops on silence. The result is on your clipboard before you reach for it.
 - 🌍 **Language routing** — speak Portuguese, Spanish or English; output in any of the three. Brazilian-Portuguese tuned.
 - 🎫 **Jira Mode** — every dictated note is cleaned into professional English as you capture it. One click turns the pile of notes into a **customer reply** + a **structured internal note**, with switchable tone/length **profiles** (Company, MSP client, Internal helpdesk, Strict).
+- 🗣️ **Say the word, get the ticket** — end a normal dictation with the trigger phrase (default *"banana jira"*) and the transcript is promoted into Jira Mode and generated on the spot. Also on the **→ JIRA** button and `Ctrl+Shift+J`.
 - 🔁 **Regenerate on the fly** — shorter, more technical, more customer-friendly, or with a follow-up — without re-dictating.
 - ✏️ **Editable output** — every generated panel (Customer, Internal, Transcript) toggles to editable in place, so you tweak the one word the model got wrong before it hits your clipboard — no full regenerate.
 - 🧠 **One AI selector, four backends** — OpenAI, Gemini, local **Ollama**, or any OpenAI-compatible endpoint. It drives speech, translation and Jira text together.
@@ -102,6 +103,11 @@ Most dictation tools ship your microphone to someone else's server. BananaPhone 
 Pick the **Ollama + local Whisper** path and *nothing* leaves the machine: audio is transcribed locally with `faster-whisper`, and translation/Jira text runs on a local LLM. No keys, no cloud, no audit trail. Perfect for ticket content you can't legally send to a third party. Prefer speed and top-tier quality? Switch to OpenAI or Gemini in one dropdown. Your call, every time.
 
 ---
+
+## ✨ New in 2.4
+
+- **Dictated it as a plain note, want a ticket anyway** — no retyping. Close the dictation with a spoken trigger phrase (default *"banana jira"*, editable in Settings) and the transcript jumps into Jira Mode and generates itself. Works with the window hidden after a hotkey dictation, when there is nothing to click.
+- **Same jump, two other ways** — a **→ JIRA** button on the Transcript panel and the global `Ctrl+Shift+J` hotkey, both taking the transcript box as-is, edits included.
 
 ## ✨ New in 2.3
 
