@@ -1,8 +1,25 @@
 # Future Releases
 
-Status as of v2.4.1.
+Status as of v2.4.2.
 
 ## Done
+
+### Source install lands in the user profile, not Downloads (v2.4.2) ✅
+- `install_windows.ps1` built the venv and pointed both shortcuts at whatever folder
+  the source zip was unpacked into - typically `Downloads\BananaPhone-Source-<ver>`.
+  Cleaning out Downloads silently killed the app, and the shortcut then pointed at a
+  dead path.
+- The installer now copies the app to `%LOCALAPPDATA%\BananaPhone` (overridable with
+  `-InstallDir`) and installs the venv and shortcuts there. Re-running it from the
+  install directory itself is detected and reuses it in place instead of self-copying.
+- Copying uses robocopy with `/XD .venv .git __pycache__`; `Copy-Item -Recurse` onto an
+  existing directory nests it (`docs\docs`) instead of merging.
+- Desktop shortcut is always created, gets the real banana icon from
+  `assets\bananaphone.ico`, and its parent directory is created first - a redirected
+  Desktop (OneDrive/Known Folder Move) no longer silently skips it. The installer warns
+  if the shortcut is missing after the attempt.
+- Final summary prints the install path and tells you the source folder is disposable.
+
 
 ### Windows installer: Python 3.14 / PyAudio wheel failure (v2.4.1) ✅
 - `install_windows.ps1` resolved the base interpreter with `py -3`, which returns the

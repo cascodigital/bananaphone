@@ -22,8 +22,11 @@ Then pick one:
   .\install_windows.ps1
   ```
 
-All three create the venv, install dependencies, and put a **BananaPhone**
-shortcut on your Desktop and Start Menu. Double-click the shortcut to run.
+All three copy the app into `%LOCALAPPDATA%\BananaPhone`, create the venv there,
+install dependencies, and put a **BananaPhone** shortcut on your Desktop and
+Start Menu. The folder you unzipped is disposable - delete it afterwards; the
+shortcuts point at the installed copy, not at your Downloads folder.
+Double-click the shortcut to run.
 Set the OpenAI key later inside the app's **Settings** (or use `-PromptForKey`,
 see below).
 
@@ -51,12 +54,15 @@ Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 
 The installer creates:
 
-- `.venv` with all dependencies (including `customtkinter`)
+- an installed copy of the app at `%LOCALAPPDATA%\BananaPhone`
+  (override with `-InstallDir "D:\Apps\BananaPhone"`)
+- `.venv` inside it, with all dependencies (including `customtkinter`)
 - a **Desktop** shortcut `BananaPhone.lnk`
 - a **Start Menu** shortcut under `BananaPhone`
 - shortcuts target `pythonw.exe` so there is **no black console window**
 
-Then just double-click the Desktop shortcut.
+Then just double-click the Desktop shortcut. The source folder you ran the
+installer from can be deleted.
 
 ### API key
 
@@ -102,7 +108,8 @@ git pull
 .\install_windows.ps1
 ```
 
-Reuses the existing `.venv`, updates dependencies, and recreates the shortcuts.
+Refreshes the installed copy at `%LOCALAPPDATA%\BananaPhone`, reuses its
+`.venv`, updates dependencies, and recreates the shortcuts.
 
 ---
 
@@ -162,7 +169,11 @@ provider, so it needs an OpenAI or Gemini key but no local model download.
   `v1.3-beta` or later. Extract it, run `Install-BananaPhone.bat`, then start the
   app through the generated shortcut, `Run-BananaPhone.bat`, or with
   `.venv\Scripts\pythonw.exe bananaphone.py`.
-- If `PyAudio` fails to install, update Python/pip first. On modern Windows with
-  Python 3.10+ it normally installs from a wheel.
+- If `PyAudio` fails to install with *"Microsoft Visual C++ 14.0 or greater is
+  required"*, your Python is too new: upstream ships prebuilt wheels only up to
+  **3.13**, and anything newer forces a source build. Install Python 3.12
+  (`winget install --id Python.Python.3.12 -e`), delete the `.venv` folder, and
+  re-run the installer. From v2.4.1 the installer picks a supported interpreter
+  by itself and refuses to start a source build.
 - For personal use you may keep an `install_windows_private.ps1` with an embedded
   key. That file is gitignored and must not be committed.

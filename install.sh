@@ -119,7 +119,7 @@ mkdir -p "$DESKTOP_DIR"
 rm -f "$DESKTOP_DIR/bananaphone-v2.desktop" "$DESKTOP_DIR/saysense.desktop" "$BIN_DIR/saysense-toggle"
 cat > "$DESKTOP_FILE" <<EOF
 [Desktop Entry]
-Version=2.4.1
+Version=2.4.2
 Name=BananaPhone
 Comment=Dictation and Jira documentation (local + API)
 Exec=$VENV_DIR/bin/python $REPO_DIR/bananaphone.py

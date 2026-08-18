@@ -1,29 +1,42 @@
 # BananaPhone - Windows installer
 #
-# Self-contained: if Python is missing it installs it (winget, with a
-# python.org fallback), then bootstraps a local venv, installs every
-# dependency, and creates Desktop + Start Menu shortcuts that launch the
-# app with no console window. tkinter is bundled and PyAudio ships as a
-# prebuilt wheel, so no compiler is needed - but only on Python 3.10-3.13.
-# The installer refuses newer interpreters rather than triggering a build.
+# Self-contained: installs the app into your user profile (NOT the folder you
+# unzipped), bootstraps a local venv, installs every dependency, and creates
+# Desktop + Start Menu shortcuts that launch the app with no console window.
+#
+# The source folder you run this from is disposable - delete it afterwards.
+# The installed copy lives at %LOCALAPPDATA%\BananaPhone and keeps working.
+#
+# tkinter is bundled and PyAudio ships as a prebuilt wheel, so no compiler is
+# needed - but only on Python 3.10-3.13. The installer refuses newer
+# interpreters rather than triggering a source build.
 #
 # Usage (PowerShell):
 #   .\install_windows.ps1
 #   .\install_windows.ps1 -PromptForKey
 #   .\install_windows.ps1 -OpenAIKey "sk-..."
-#   .\install_windows.ps1 -WithOllama        # also install Ollama + pull model
+#   .\install_windows.ps1 -WithOllama              # also install Ollama + pull model
+#   .\install_windows.ps1 -InstallDir "D:\Apps\BananaPhone"
 #
 # Easiest path: just double-click Install-BananaPhone.bat (handles ExecutionPolicy).
 
 param(
     [string]$OpenAIKey = "",
     [switch]$PromptForKey,
-    [switch]$WithOllama
+    [switch]$WithOllama,
+    [string]$InstallDir = ""
 )
 
 $ErrorActionPreference = "Stop"
 
-$ProjectDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+$SourceDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+
+# Install into the user profile so the app survives cleaning out Downloads.
+if ([string]::IsNullOrWhiteSpace($InstallDir)) {
+    $InstallDir = Join-Path $env:LOCALAPPDATA "BananaPhone"
+}
+$ProjectDir = $InstallDir
+
 $VenvDir = Join-Path $ProjectDir ".venv"
 $Python = Join-Path $VenvDir "Scripts\python.exe"
 $Pythonw = Join-Path $VenvDir "Scripts\pythonw.exe"
@@ -33,6 +46,34 @@ $StartMenuDir = Join-Path ([Environment]::GetFolderPath("Programs")) "BananaPhon
 $StartMenuShortcut = Join-Path $StartMenuDir "BananaPhone.lnk"
 $ConfigDir = Join-Path $env:USERPROFILE ".config\bananafone"
 $KeyFile = Join-Path $ConfigDir "ai-keys.md"
+
+# --- copy the app into the install directory -------------------------------
+function Copy-AppFiles {
+    # robocopy rather than Copy-Item: copying a directory onto an existing one
+    # with Copy-Item -Recurse nests it (dst\docs\docs) instead of merging.
+    # .venv is per-install and .git/__pycache__ are dead weight; everything else
+    # (bananaphone.py, requirements.txt, assets, docs) has to come along.
+    New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null
+    robocopy $SourceDir $InstallDir /E /NFL /NDL /NJH /NJS /NP /R:1 /W:1 `
+        /XD ".venv" ".git" "__pycache__" | Out-Null
+    # robocopy signals success with 0-7; 8 and up are real failures.
+    if ($LASTEXITCODE -ge 8) { throw "Copying app files to $InstallDir failed (robocopy $LASTEXITCODE)." }
+    $global:LASTEXITCODE = 0
+}
+
+$SourceResolved = (Resolve-Path $SourceDir).Path.TrimEnd('\')
+$InstallResolved = $InstallDir.TrimEnd('\')
+if ($SourceResolved -ieq $InstallResolved) {
+    Write-Host "Running from the install directory - reusing it in place."
+}
+else {
+    Write-Host "Installing app files to $InstallDir ..."
+    Copy-AppFiles
+}
+
+if (-not (Test-Path $AppScript)) {
+    throw "bananaphone.py is missing from $InstallDir - the copy step failed."
+}
 
 Set-Location $ProjectDir
 
@@ -187,24 +228,35 @@ if (Test-Path $Pythonw) {
     $LauncherTarget = $Pythonw
 }
 
+$IconFile = Join-Path $ProjectDir "assets\bananaphone.ico"
 $WScriptShell = New-Object -ComObject WScript.Shell
 
 function New-AppShortcut($Path) {
+    New-Item -ItemType Directory -Force -Path (Split-Path -Parent $Path) | Out-Null
     $Shortcut = $WScriptShell.CreateShortcut($Path)
     $Shortcut.TargetPath = $LauncherTarget
     $Shortcut.Arguments = "`"$AppScript`""
     $Shortcut.WorkingDirectory = $ProjectDir
-    $Shortcut.IconLocation = "$env:SystemRoot\System32\SHELL32.dll,220"
+    if (Test-Path $IconFile) {
+        $Shortcut.IconLocation = $IconFile
+    }
+    else {
+        $Shortcut.IconLocation = "$env:SystemRoot\System32\SHELL32.dll,220"
+    }
     $Shortcut.Description = "BananaPhone - dictation and Jira documentation"
     $Shortcut.Save()
 }
 
 New-AppShortcut $DesktopShortcut
-New-Item -ItemType Directory -Force -Path $StartMenuDir | Out-Null
 New-AppShortcut $StartMenuShortcut
+
+if (-not (Test-Path $DesktopShortcut)) {
+    Write-Host "WARNING: the Desktop shortcut could not be created at $DesktopShortcut" -ForegroundColor Red
+}
 
 Write-Host ""
 Write-Host "BananaPhone installed." -ForegroundColor Green
+Write-Host "Installed to     : $ProjectDir"
 Write-Host "Desktop shortcut : $DesktopShortcut"
 Write-Host "Start Menu       : $StartMenuShortcut"
 Write-Host "Launcher         : $LauncherTarget `"$AppScript`""
@@ -218,4 +270,7 @@ if (-not $WithOllama) {
     Write-Host "Local LLM        : not installed. Re-run with -WithOllama, or install from Settings."
 }
 Write-Host ""
+if ($SourceResolved -ine $InstallResolved) {
+    Write-Host "The folder you ran this from is no longer needed - you can delete it." -ForegroundColor Yellow
+}
 Write-Host "Double-click the Desktop shortcut to start."
