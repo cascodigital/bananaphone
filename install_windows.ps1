@@ -3,8 +3,9 @@
 # Self-contained: if Python is missing it installs it (winget, with a
 # python.org fallback), then bootstraps a local venv, installs every
 # dependency, and creates Desktop + Start Menu shortcuts that launch the
-# app with no console window. tkinter and PyAudio ship as wheels/bundled on
-# Windows, so no compiler is needed.
+# app with no console window. tkinter is bundled and PyAudio ships as a
+# prebuilt wheel, so no compiler is needed - but only on Python 3.10-3.13.
+# The installer refuses newer interpreters rather than triggering a build.
 #
 # Usage (PowerShell):
 #   .\install_windows.ps1
@@ -35,12 +36,36 @@ $KeyFile = Join-Path $ConfigDir "ai-keys.md"
 
 Set-Location $ProjectDir
 
+# PyAudio ships prebuilt wheels only up to these interpreters. On anything
+# newer pip falls back to a source build, which needs MSVC Build Tools and
+# dies with "Microsoft Visual C++ 14.0 or greater is required".
+$SupportedPyMinor = @(13, 12, 11, 10)
+
+function Test-PythonUsable($Exe, $ArgList) {
+    # Probing a missing "py -3.x" writes to stderr; with the script-level Stop
+    # preference that would abort instead of just failing the probe.
+    $ErrorActionPreference = "Continue"
+    try {
+        $v = & $Exe @ArgList -c "import sys; print(sys.version_info.minor)" 2>$null
+        if ($LASTEXITCODE -ne 0) { return $false }
+        return $SupportedPyMinor -contains [int]$v
+    }
+    catch { return $false }
+}
+
 function Find-BasePython {
-    if (Get-Command py -ErrorAction SilentlyContinue) { return @("py", "-3") }
+    if (Get-Command py -ErrorAction SilentlyContinue) {
+        # Ask for a specific minor first; "py -3" hands back the NEWEST install,
+        # which is exactly how you end up on a PyAudio-less interpreter.
+        foreach ($m in $SupportedPyMinor) {
+            $cand = @("py", "-3.$m")
+            if (Test-PythonUsable $cand[0] $cand[1..($cand.Length - 1)]) { return $cand }
+        }
+    }
     if (Get-Command python -ErrorAction SilentlyContinue) {
         # Skip the WindowsApps execution-alias stub that just opens the Store.
         $p = (Get-Command python).Source
-        if ($p -notlike "*WindowsApps*") { return @("python") }
+        if ($p -notlike "*WindowsApps*" -and (Test-PythonUsable $p @())) { return @($p) }
     }
     return $null
 }
@@ -48,7 +73,7 @@ function Find-BasePython {
 # --- ensure Python is present ----------------------------------------------
 $BasePy = Find-BasePython
 if (-not $BasePy) {
-    Write-Host "Python not found. Installing it automatically..." -ForegroundColor Yellow
+    Write-Host "No supported Python found (need 3.10-3.13). Installing 3.12..." -ForegroundColor Yellow
     if (Get-Command winget -ErrorAction SilentlyContinue) {
         winget install --id Python.Python.3.12 --source winget `
             --accept-package-agreements --accept-source-agreements --silent
@@ -70,21 +95,52 @@ if (-not $BasePy) {
 }
 
 # --- venv + dependencies ---------------------------------------------------
+# A venv left over from an unsupported interpreter poisons every later step,
+# so rebuild it instead of installing into it.
+if ((Test-Path $Python) -and -not (Test-PythonUsable $Python @())) {
+    Write-Host "Existing .venv runs an unsupported Python. Rebuilding it..." -ForegroundColor Yellow
+    Remove-Item -Recurse -Force $VenvDir
+}
+
 if (-not (Test-Path $Python)) {
     Write-Host "Creating virtual environment..."
     $BaseExe = $BasePy[0]
     $BaseArgs = @()
     if ($BasePy.Length -gt 1) { $BaseArgs = $BasePy[1..($BasePy.Length - 1)] }
     & $BaseExe @BaseArgs -m venv .venv
+    if (-not (Test-Path $Python)) { throw "venv creation failed - no python.exe at $Python" }
 }
+
+$PyVer = & $Python -c "import sys; print('.'.join(map(str, sys.version_info[:3])))"
+Write-Host "Using Python $PyVer at $Python" -ForegroundColor Cyan
 
 Write-Host "Installing dependencies (this can take a while: faster-whisper is large)..."
 & $Python -m pip install --upgrade pip
-& $Python -m pip install -r requirements.txt
+
+# --only-binary keeps pip from attempting a source build that would demand a
+# C++ toolchain. PyAudio goes first and alone: when it fails inside a combined
+# `-r requirements.txt` run, pip aborts the whole transaction and NOTHING gets
+# installed, which is how a failed PyAudio build leaves you without a GUI.
+& $Python -m pip install --only-binary=:all: "PyAudio>=0.2.13"
+if ($LASTEXITCODE -ne 0) {
+    throw ("No prebuilt PyAudio wheel for Python $PyVer (upstream ships wheels up " +
+           "to 3.13 only). Install Python 3.12 with " +
+           "'winget install --id Python.Python.3.12 -e', delete the .venv folder, " +
+           "and re-run this installer.")
+}
+
+& $Python -m pip install --only-binary=:all: -r requirements.txt
+if ($LASTEXITCODE -ne 0) {
+    # Some pure-Python deps may legitimately have no wheel; retry unrestricted
+    # now that PyAudio - the only one needing a compiler - is already in place.
+    & $Python -m pip install -r requirements.txt
+    if ($LASTEXITCODE -ne 0) { throw "Dependency installation failed. See the pip output above." }
+}
 
 # --- sanity check ----------------------------------------------------------
 Write-Host "Verifying imports..."
 & $Python -c "import tkinter, customtkinter, numpy, speech_recognition, pyaudio; from faster_whisper import WhisperModel; print('All imports OK')"
+if ($LASTEXITCODE -ne 0) { throw "Import check failed - the install is incomplete, see the traceback above." }
 
 # --- optional OpenAI key ---------------------------------------------------
 if ($PromptForKey -and [string]::IsNullOrWhiteSpace($OpenAIKey)) {

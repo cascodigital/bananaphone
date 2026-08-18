@@ -1,8 +1,29 @@
 # Future Releases
 
-Status as of v2.2.1.
+Status as of v2.4.1.
 
 ## Done
+
+### Windows installer: Python 3.14 / PyAudio wheel failure (v2.4.1) ✅
+- `install_windows.ps1` resolved the base interpreter with `py -3`, which returns the
+  **newest** Python present. PyAudio 0.2.14 publishes prebuilt wheels only up to
+  cp313, so on Python 3.14 pip fell through to a source build and died with
+  "Microsoft Visual C++ 14.0 or greater is required" — unfixable on a locked-down
+  work machine where a C++ toolchain is not an option.
+- Worse, dependencies installed as a single `pip install -r requirements.txt`. PyAudio
+  failing aborted the entire pip transaction, so customtkinter/numpy/faster-whisper
+  were never installed either — and the script still printed "BananaPhone installed"
+  and created shortcuts pointing at an empty venv.
+- Fixes:
+  - Interpreter discovery probes `py -3.13/-3.12/-3.11/-3.10` and validates via
+    `sys.version_info`, instead of accepting whatever `py -3` hands back.
+  - A pre-existing `.venv` built on an unsupported interpreter is detected and
+    rebuilt rather than reused.
+  - PyAudio installs first and alone with `--only-binary=:all:`, so pip never
+    attempts a source build; failure raises an actionable error instead of taking
+    every other dependency down with it.
+  - The import sanity check now honors `$LASTEXITCODE`, so a broken install can no
+    longer report success.
 
 ### Window always-on-top fix (v2.2.1) ✅
 - The dictation window set `-topmost True` at init and never cleared it, so it stayed
