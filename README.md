@@ -108,10 +108,11 @@ Pick the **Ollama + local Whisper** path and *nothing* leaves the machine: audio
 
 - **Dictated it as a plain note, want a ticket anyway** — no retyping. Close the dictation with a spoken trigger phrase (default *"banana jira"*, editable in Settings) and the transcript jumps into Jira Mode and generates itself. Works with the window hidden after a hotkey dictation, when there is nothing to click.
 - **Same jump, two other ways** — a **→ JIRA** button on the Transcript panel and the global `Ctrl+Shift+J` hotkey, both taking the transcript box as-is, edits included.
+- **A Windows install that survives you** (2.4.1 / 2.4.2) — the installer now picks a Python version PyAudio actually ships wheels for, installs dependencies so one failure can't silently gut the rest, and copies the app into `%LOCALAPPDATA%\BananaPhone` instead of running from the unzipped Downloads folder you were about to delete.
 
 ## ✨ New in 2.3
 
-- **BananaPhone is back** 🍌 — the app returns to its original name, everywhere: window, taskbar, installer, launchers. Same app, same settings, same update path — upgrades install right over SaySense 2.2.x.
+- **One name, everywhere** 🍌 — window, taskbar, installer and launchers all say BananaPhone. Same app, same settings, same update path — upgrades install straight over any 2.2.x build.
 - **History you can actually use** — click any entry in the History tab to select it; **Reopen**, **Copy Customer** and **Copy Internal** now act on the selected ticket, not just the latest one.
 - **A face in the crowd** — proper banana icon in the title bar, taskbar and dock on both Windows and Linux, instead of the generic Python/Tk placeholder.
 
@@ -214,5 +215,5 @@ BananaPhone is free and MIT-licensed. If it saves you a few tickets' worth of ty
 MIT — see [LICENSE](LICENSE).
 
 <div align="center">
-<sub>Project lineage: BananaPhone v1 → BananaPhone v2 → a brief identity crisis as "SaySense" → <b>BananaPhone</b>, back where it belongs. 🍌<br>Internal storage paths remain <code>bananafone</code>-compatible for backward compatibility.</sub>
+<sub>Project lineage: BananaPhone v1 → BananaPhone v2 → <b>BananaPhone</b> v2.4. 🍌<br>Internal storage paths remain <code>bananafone</code>-compatible for backward compatibility.</sub>
 </div>

@@ -45,7 +45,7 @@ Status as of v2.4.2.
 ### Window always-on-top fix (v2.2.1) ✅
 - The dictation window set `-topmost True` at init and never cleared it, so it stayed
   glued over every other window for its whole lifetime. Now it pops to front on launch
-  and releases topmost after 400ms (`saysense.py` `DictationApp.__init__`), keeping the
+  and releases topmost after 400ms (`bananaphone.py` `DictationApp.__init__`), keeping the
   intended "appear when summoned" behavior without hogging the foreground.
 
 ### Local Jira quality + model tiers + one-shot (v2.1.0) ✅
@@ -125,14 +125,6 @@ Status as of v2.4.2.
 - Notes already carry timestamps; history preserves time and order.
 
 ## Remaining
-
-### Branding Polish
-- Replace old banana-themed icon assets with SaySense-specific artwork.
-- Refresh README screenshots for the new two-column UI.
-- Migrate config/log paths from `~/.config/bananafone` and
-  `~/.local/state/bananafone` to `saysense`, with automatic import of
-  existing settings and history. (Settings file is already `settings_v2.json`
-  but the parent dir is still `bananafone`.)
 
 ### Settings UX
 - Split the main Settings dialog into tabs or a scrollable layout

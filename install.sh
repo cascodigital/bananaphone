@@ -116,6 +116,7 @@ fi
 
 # --- desktop launcher ------------------------------------------------------
 mkdir -p "$DESKTOP_DIR"
+# legacy launchers left behind by pre-2.3 installs (do not remove: orphan entries otherwise)
 rm -f "$DESKTOP_DIR/bananaphone-v2.desktop" "$DESKTOP_DIR/saysense.desktop" "$BIN_DIR/saysense-toggle"
 cat > "$DESKTOP_FILE" <<EOF
 [Desktop Entry]
