@@ -35,7 +35,7 @@ except Exception:
     pynput_keyboard = None
 
 APP_NAME = "BananaPhone"
-APP_VERSION = "2.5.1"
+APP_VERSION = "2.6.0"
 APP_TITLE = f"{APP_NAME} {APP_VERSION}"
 
 # --- Self-update (GitHub Releases) -----------------------------------------
@@ -206,7 +206,12 @@ JIRA_PROMPT_MODES = (JIRA_PROMPT_MODE_BUILTIN_EXTRA, JIRA_PROMPT_MODE_FULL_CUSTO
 # --- Jira profiles (structured, switchable presets) ---------------------
 JIRA_TONES = ["Professional", "Friendly", "Terse", "Formal"]
 JIRA_LENGTHS = ["Short", "Standard", "Detailed"]
-DEFAULT_JIRA_SECTIONS = ["Issue", "Investigation", "Actions", "Result", "Follow-up"]
+# Empty = prose. Changed 2026-09-22: the manager who matters rejects anything that
+# looks machine-generated, and a labelled skeleton ("Issue: / Follow-up: ...") is the
+# loudest tell there is. Sections still work if someone types them into the profile
+# editor — LEGACY_JIRA_SECTIONS is what the app used to force on everyone.
+DEFAULT_JIRA_SECTIONS = []
+LEGACY_JIRA_SECTIONS = ["Issue", "Investigation", "Actions", "Result", "Follow-up"]
 JIRA_TONE_PROMPT = {
     "Professional": "Tone: professional and neutral, the standard support register.",
     "Friendly": "Tone: warm, friendly and approachable while still professional.",
@@ -214,15 +219,15 @@ JIRA_TONE_PROMPT = {
     "Formal": "Tone: formal corporate register.",
 }
 JIRA_LENGTH_PROMPT = {
-    "Short": "Length: keep it short. customer_comment 1-2 sentences; internal_note one tight line per section.",
+    "Short": "Length: keep it short. customer_comment 1-2 sentences; internal_note a few tight lines.",
     "Standard": "Length: standard. customer_comment 2-4 sentences; internal_note concise but complete.",
-    "Detailed": "Length: thorough. customer_comment 3-5 sentences; internal_note detailed under each section.",
+    "Detailed": "Length: thorough. customer_comment 3-5 sentences; internal_note detailed but still prose.",
 }
 # Small local models (qwen2.5:7b et al.) follow a concrete example far better
 # than dense prose rules. This one example is injected ONLY for local text
 # providers and deliberately anchors the four rules they break most often:
-# one section per line, follow-up preserved (not "None"), no jargon in the
-# public field, and identifiers/paths kept verbatim. See memory
+# prose with no field labels, no jargon in the public field, and identifiers/paths
+# kept verbatim. See memory
 # "bananaphone-ollama-jira-qualidade".
 # No ticket number / personal name on purpose: small models parrot literal
 # values from the example into unrelated tickets. The file path and the
@@ -241,12 +246,11 @@ LOCAL_JIRA_FEWSHOT_OUTPUT = json.dumps(
             "we can confirm it's fully resolved."
         ),
         "internal_note": (
-            "Issue: Teams prompts for password every morning.\n"
-            "Investigation: Suspected stale Teams cache and cached credentials.\n"
-            "Actions: Cleared cache folder AppData\\Microsoft\\Teams; removed cached "
-            "credentials under MicrosoftOffice16 in Windows Credential Manager.\n"
-            "Result: Workaround applied; awaiting confirmation.\n"
-            "Follow-up: User to confirm tomorrow that the prompts stopped."
+            "User reported Teams prompting for a password every morning. Suspected stale "
+            "Teams cache plus cached credentials.\n\n"
+            "Cleared the cache folder AppData\\Microsoft\\Teams and removed the cached "
+            "credentials under MicrosoftOffice16 in Windows Credential Manager.\n\n"
+            "Workaround applied; user will confirm tomorrow whether the prompts stopped."
         ),
     },
     ensure_ascii=False,
@@ -368,7 +372,7 @@ BUILTIN_JIRA_PROFILES = [
         "builtin": True,
         "tone": "Professional",
         "length": "Standard",
-        "sections": list(DEFAULT_JIRA_SECTIONS),
+        "sections": [],
         "extra": "",
     },
     {
@@ -377,7 +381,7 @@ BUILTIN_JIRA_PROFILES = [
         "builtin": True,
         "tone": "Friendly",
         "length": "Standard",
-        "sections": list(DEFAULT_JIRA_SECTIONS),
+        "sections": [],
         "extra": "This goes to an external managed-services client. Keep the customer_comment "
                  "warm and reassuring, reinforcing that the issue is being handled. Reference SLA "
                  "or contract terms only when the dictation mentions them; never invent them.",
@@ -388,7 +392,7 @@ BUILTIN_JIRA_PROFILES = [
         "builtin": True,
         "tone": "Terse",
         "length": "Short",
-        "sections": list(DEFAULT_JIRA_SECTIONS),
+        "sections": [],
         "extra": "Audience is an internal team. Skip commercial niceties. customer_comment can be "
                  "a brief direct update to a colleague; internal_note stays technical and dense.",
     },
@@ -398,7 +402,7 @@ BUILTIN_JIRA_PROFILES = [
         "builtin": True,
         "tone": "Terse",
         "length": "Short",
-        "sections": list(DEFAULT_JIRA_SECTIONS),
+        "sections": [],
         "extra": "Minimal and strictly factual. No empathy, no filler, no softening. Record only "
                  "what the dictation states.",
     },
@@ -1933,10 +1937,8 @@ class DictationApp:
         warnings = []
         if len(customer_comment.split()) < 8:
             warnings.append("Customer comment looks very short")
-        if "Result:" not in internal_note:
-            warnings.append("Internal note missing Result")
-        if "Issue:" not in internal_note:
-            warnings.append("Internal note missing Issue")
+        if len(internal_note.split()) < 12:
+            warnings.append("Internal note looks very short")
         return warnings
 
     def load_settings(self):
@@ -3044,7 +3046,7 @@ class DictationApp:
                                         dropdown_hover_color=BTN_PRIMARY)
         length_menu.grid(row=1, column=1, sticky="w", pady=(2, 0))
 
-        ctk.CTkLabel(body, text="Internal note sections (one per line)",
+        ctk.CTkLabel(body, text="Internal note sections (one per line — leave EMPTY for plain prose)",
                      font=ctk.CTkFont(size=11, weight="bold"), text_color=COLOR_MUTED).pack(anchor="w")
         sections_box = ctk.CTkTextbox(body, height=110, font=ctk.CTkFont(size=12), fg_color=COLOR_FIELD,
                                       border_color=COLOR_CARD_BORDER, border_width=1, corner_radius=10,
@@ -3980,8 +3982,11 @@ class DictationApp:
             sections = [str(s).strip() for s in sections if str(s).strip()]
         else:
             sections = []
-        if not sections:
-            sections = list(DEFAULT_JIRA_SECTIONS)
+        # Migration (2026-09-22): a profile still carrying the old forced skeleton is
+        # reset to prose. An empty list is now a valid, meaningful choice, so it is
+        # never backfilled with defaults any more.
+        if sections == LEGACY_JIRA_SECTIONS:
+            sections = []
         tone = raw.get("tone")
         if tone not in JIRA_TONES:
             tone = "Professional"
@@ -4040,11 +4045,61 @@ class DictationApp:
             "Result": "current state — resolved, workaround in place, or pending.",
             "Follow-up": "anything to monitor or do next. Write 'None' if truly nothing.",
         }
-        sections = profile["sections"] or list(DEFAULT_JIRA_SECTIONS)
-        section_lines = "\n".join(
-            f"  {label}: {section_desc.get(label, 'the relevant details for this section.')}"
-            for label in sections
-        )
+        sections = profile["sections"]
+        if sections:
+            structure_block = (
+                "- Structure it under these labels, each on its own line, omitting any with no "
+                "real content:\n"
+                + "\n".join(
+                    f"  {label}: {section_desc.get(label, 'the relevant details for this section.')}"
+                    for label in sections
+                )
+            )
+            structure_rules = [
+                "In internal_note, put EACH section label on its own line. Never run two "
+                "sections together on the same line.",
+                "If a section has no real content, omit it rather than padding it.",
+            ]
+        else:
+            # Default since 2026-09-22 — see DEFAULT_JIRA_SECTIONS.
+            structure_block = (
+                "- Write it as PLAIN PROSE, the way one engineer writes to another in a chat: "
+                "two or three short paragraphs, in the order things happened.\n"
+                "- Cover what was reported, what was checked and how, what was actually done "
+                "(tools, commands, config changes, hostnames, ticket/asset IDs exactly as "
+                "dictated), and the state it ended in.\n"
+                "- ABSOLUTELY NO field labels. Never write 'Issue:', 'Investigation:', "
+                "'Actions:', 'Result:', 'Follow-up:', 'Next steps:', 'Summary:', 'Root cause:' "
+                "or any equivalent in any language. No headings, no bullet scaffolding, no "
+                "bold labels, no separator lines, no status emoji. Paragraph breaks are the "
+                "only structure allowed.\n"
+                "- Mention something pending ONLY if it is a concrete action with an owner. "
+                "Do not close with routine filler like 'will monitor' or 'awaiting feedback', "
+                "and never write 'None' — there is no field to fill in."
+            )
+            structure_rules = [
+                "internal_note is prose. No field labels, no headings, no bullet "
+                "scaffolding, in any language.",
+                "Nothing to say on a point means not writing the sentence — never pad for "
+                "symmetry.",
+            ]
+
+        rules = [
+            "Preserve every identifier verbatim: names, times, IPs, hostnames, ticket/asset "
+            "IDs, error codes, file paths and command names. Never paraphrase or drop them.",
+            "Never invent facts, numbers, names, error codes, or outcomes not in the dictation.",
+            *structure_rules,
+            "If the dictation does not describe a completed fix, do NOT mark it resolved: close "
+            "as a progress update and reflect that in customer_comment.",
+            "If the dictation mentions something to check, confirm, or do next, keep it — "
+            "worded as an action with an owner, not as a reminder to nobody.",
+            "customer_comment is PUBLIC: no jargon, no tool names, no commands, no file paths, "
+            "no internal blame.",
+            "Both fields must read as written by a person. No machine tells: no repeating the "
+            "same fact twice, no formulaic symmetry, no boilerplate openers or closers.",
+            f"Write both fields in fluent, native-level {language_name}.",
+        ]
+        hard_rules = "\n".join(f"{i}. {rule}" for i, rule in enumerate(rules, 1))
 
         prompt = (
             f"You are a senior IT support engineer turning ticket notes into clean Jira documentation "
@@ -4065,22 +4120,9 @@ class DictationApp:
             "- No filler openers like 'I hope this finds you well'.\n\n"
             "=== internal_note (PRIVATE — support team only) ===\n"
             "- Full technical picture for a peer engineer. Direct, matter-of-fact, no softening.\n"
-            "- Structure it under these labels, each on its own line, omitting any with no real content:\n"
-            f"{section_lines}\n\n"
+            f"{structure_block}\n\n"
             "=== HARD RULES (follow every one) ===\n"
-            "1. Preserve every identifier verbatim: names, times, IPs, hostnames, ticket/asset "
-            "IDs, error codes, file paths and command names. Never paraphrase or drop them.\n"
-            "2. Never invent facts, numbers, names, error codes, or outcomes not in the dictation.\n"
-            "3. In internal_note, put EACH section label on its own line. Never run two sections "
-            "together on the same line.\n"
-            "4. If the dictation does not describe a completed fix, do NOT mark it resolved: write "
-            "the closing section as a progress update and reflect that in customer_comment.\n"
-            "5. Follow-up: if the dictation mentions anything to check, confirm, or do next, capture "
-            "it there. Only write 'None' when there is genuinely nothing pending.\n"
-            "6. customer_comment is PUBLIC: no jargon, no tool names, no commands, no file paths, "
-            "no internal blame.\n"
-            "7. If a section has no real content, omit it rather than padding it.\n"
-            f"8. Write both fields in fluent, native-level {language_name}.\n"
+            f"{hard_rules}\n"
         )
         extra = (profile.get("extra") or "").strip()
         if extra:
@@ -4131,7 +4173,7 @@ class DictationApp:
 
         # Deterministic safety net: small models still drop a backbone section or
         # collapse Follow-up to "None". Repair once before accepting the output.
-        if is_local:
+        if is_local and sections:
             warnings = self.jira_structure_warnings(result["internal_note"], sections)
             if warnings:
                 result = self.repair_jira_output(messages, result, sections, warnings, timeout)
