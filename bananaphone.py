@@ -1372,11 +1372,13 @@ class DictationApp:
             wrap="word",
         )
         textbox.pack(fill=tk.BOTH, expand=True, padx=4, pady=4)
+        # Every panel gets an explicit colour. The theme default is already too
+        # dim on this near-black field, and CustomTkinter dims it further for a
+        # disabled widget -- but read-only is not inactive, and an editable panel
+        # is not a placeholder. Pinning it covers Raw Notes and Translate too.
+        textbox.configure(text_color=COLOR_TITLE)
         if not editable:
-            # These panels are read-only, not inactive. CustomTkinter dims the
-            # text of a disabled widget, which on this near-black field is barely
-            # legible, so the read-only colour is pinned to the normal one.
-            textbox.configure(state="disabled", text_color=COLOR_TITLE)
+            textbox.configure(state="disabled")
         return textbox
 
     def set_window_icon(self):

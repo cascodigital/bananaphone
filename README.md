@@ -44,59 +44,34 @@ A spellchecker tells you a word is wrong. This tells you which mistake is *yours
 
 ## See it
 
-**You speak Brazilian Portuguese. The ticket comes out in English.** That's the whole trick — dictate rough notes in the language you think in, and get a clean customer reply plus a structured internal note in the language your tools and clients expect. The `INPUT → OUTPUT` selector sets the direction; the full text of one real case is in [Jira Mode, end to end](#jira-mode-end-to-end) below.
+**Two jobs, one window.** Speak a language you don't have and it translates. Speak one you
+are still learning and it fixes what you said — then tells you what you got wrong.
 
 <div align="center">
 
+<img src="docs/screenshots/dictate-coach.png" alt="Dictate with the language coach" width="620">
+
+<em><b>Dictate.</b> You spoke English; the panel holds the sentence you <em>meant</em>. <b>OUTPUT STYLE</b> decides how hard it may rewrite you — flip it after the fact and the text re-renders without speaking again. Below, the coach: one correction, in your own language, and how often you keep making it.</em>
+
+<br><br>
+
+<img src="docs/screenshots/jira-mode.png" alt="Jira Mode workspace" width="620">
+
+<em><b>Jira Mode.</b> Dictate rough notes in Portuguese during the call; they land in English. One <b>Generate</b> splits them into a customer-facing reply and a structured internal note — Customer / Internal / Raw Notes / History as tabs, each editable in place before you copy.</em>
+
+<br><br>
+
 <img src="docs/screenshots/demo.gif" alt="Jira Mode end to end" width="560">
 
-<em>Dictate during the call in Brazilian Portuguese; the notes land already in English. One <strong>Generate</strong> turns them into a customer-facing reply and a structured internal note — each editable in place before you copy.</em>
+<em>The same thing in motion — dictation to finished ticket, one click.</em>
 
 <br><br>
 
-<img src="docs/screenshots/jira-mode.png" alt="Jira Mode workspace" width="560">
+<img src="docs/screenshots/settings-coach.png" alt="Settings" width="420">
 
-<em>The workspace — Customer / Internal / Raw Notes / History as tabs, captured live and generated in one click.</em>
-
-<br><br>
-
-<img src="docs/screenshots/settings.png" alt="Settings" width="360">
-
-<em>One provider selector drives speech, translation and Jira — cloud or fully local — with a live readout of whether audio or ticket text ever leaves the machine.</em>
-
-<br><br>
-
-<img src="docs/screenshots/dictate-coach.png" alt="Dictate with the language coach" width="560">
-
-<em>New in 3.0.0 — dictate in a language you are still learning. The panel gives you the sentence you meant to write; the coach below tells you the one thing to fix, in your own language, and counts how often you keep making it.</em>
-
-<br><br>
-
-<img src="docs/screenshots/settings-coach.png" alt="The 3.0 settings" width="400">
-
-<em>Your first language, how much detail the coach gives you, and whether it runs at all — every part of it is a setting, and the coach can be turned off without losing the polish.</em>
+<em>One provider selector drives speech, translation and Jira — cloud or fully local — with a live readout of whether audio or ticket text ever leaves the machine. Your first language, the coach's level of detail, and whether it runs at all are all settings.</em>
 
 </div>
-
----
-
-## What it does
-
-- 🗣️ **Speak a language you are still learning** — dictate in English (or Spanish) and get
-  back the sentence you meant to write, in **Raw** (your phrasing, errors fixed) or
-  **Professional** (rewritten for the audience). Flip between them after the fact without
-  speaking again. See [RELEASE_NOTES_3.0.0.md](RELEASE_NOTES_3.0.0.md).
-- 🎓 **Language coach** — one correction per dictation, written in your first language,
-  with a rolling count of the mistakes you actually repeat. Never touches the clipboard.
-- 🎙️ **Press-to-talk dictation** — hold the button (or the global hotkey `Ctrl+Shift+D`), speak, and it auto-stops on silence. The result is on your clipboard before you reach for it.
-- 🌍 **Language routing** — speak Portuguese, Spanish or English; output in any of the three. Brazilian-Portuguese tuned.
-- 📋 **Paste & translate** — the **Translate** tab handles text you already have instead of dictating it: paste, `Ctrl+Enter`, and the translation is on your clipboard with its formatting intact.
-- 🎫 **Jira Mode** — every dictated note is cleaned into professional English as you capture it. One click turns the pile of notes into a **customer reply** + a **structured internal note**, with switchable tone/length **profiles** (Company, MSP client, Internal helpdesk, Strict).
-- 🗣️ **Say the word, get the ticket** — end a normal dictation with the trigger phrase (default *"banana jira"*) and the transcript is promoted into Jira Mode and generated on the spot. Also on the **→ JIRA** button and `Ctrl+Shift+J`.
-- 🔁 **Regenerate on the fly** — shorter, more technical, more customer-friendly, or with a follow-up — without re-dictating.
-- ✏️ **Editable output** — every generated panel (Customer, Internal, Transcript) toggles to editable in place, so you tweak the one word the model got wrong before it hits your clipboard — no full regenerate.
-- 🧠 **One AI selector, four backends** — OpenAI, Gemini, local **Ollama**, or any OpenAI-compatible endpoint. It drives speech, translation and Jira text together.
-- ⚡ **Light on resources** — local models unload from RAM 60s after a call instead of squatting on your memory.
 
 ---
 
