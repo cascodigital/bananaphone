@@ -2,6 +2,41 @@
 
 Status as of v2.5.1.
 
+## Open
+
+### Text selection freezes desktop-wide while BananaPhone runs (unresolved, 2026-09-29)
+- Symptom: mouse text selection stops working in other apps (native Wayland clients such as
+  tilix) and only recovers when BananaPhone is closed. Intermittent, so any claim of a fix
+  needs the real event observed, not a manual trigger.
+- The v2.5.1 pynput entry below is neither the cause nor the cure. The log confirms the
+  listener is disabled on **every** launch (most recent: 2026-09-29 08:48:38) and the freeze
+  still happens. That fix addressed a real hazard and left the bug untouched.
+- Measured and ruled out:
+  - **Global X grab.** On Linux every CustomTkinter dropdown opens through `tk_popup`, which
+    does `grab -global` — pointer *and* keyboard on the whole X server. Confirmed with an
+    Xlib probe: `AlreadyGrabbed` while a dropdown is open, released on unpost. Two A/B runs
+    holding the grab (120 s and a labelled 15 s phase against a 15 s no-grab control):
+    selection in tilix kept working in all of them. The grab stays inside XWayland because
+    `org.gnome.mutter.wayland xwayland-allow-grabs` is `false`, so it never reaches Wayland
+    clients.
+  - **X to Wayland selection bridge.** With a Tk client owning PRIMARY and its mainloop
+    blocked, `wl-paste --primary` hangs and mutter applies no timeout of its own (measured
+    25 s, it returned only when the owner unblocked). Real defect class, but it breaks
+    pasting, not the act of selecting, and the user confirmed selection dies first.
+  - **Stuck modifier, stuck mouse button, stuck keys.** Clean in every sample taken so far
+    (only NumLock set).
+- Open lead: the single clean reproduction (20:24:29-20:24:40) happened while a freshly
+  mapped XWayland window took focus during an in-progress selection. The same grab held
+  later, without a window appearing, broke nothing. Focus stealing on map is the suspect:
+  `attributes("-topmost")` at startup and `deiconify`/`lift`/`focus_force` in
+  `start_hotkey_recording_command`.
+- Instrument left running: `tools/input-watch.py` samples the session every 2 s and logs
+  only anomalies to `~/.local/state/bananafone/input-watch.log` (grabs, modifier and button
+  mask, stuck keys, leaked override-redirect windows, PRIMARY owner, `wl-paste` latency).
+  `--once` prints a snapshot and also tests for grabs. Baseline is self-calibrated at start,
+  so mutter's own guard window does not show up as a finding. Next occurrence is meant to be
+  decided from that log.
+
 ## Done
 
 ### Fix Wayland input grab / stuck modifiers on Linux (v2.5.1) ✅
