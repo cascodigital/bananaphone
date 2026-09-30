@@ -317,5 +317,5 @@ BananaPhone is free and MIT-licensed. If it saves you a few tickets' worth of ty
 MIT — see [LICENSE](LICENSE).
 
 <div align="center">
-<sub>Project lineage: BananaPhone v1 → v2 → <b>v3</b>. 🍌<br>Internal storage paths remain <code>bananafone</code>-compatible for backward compatibility.</sub>
+<sub>🍌 Made by <a href="https://github.com/cascodigital">Casco Digital</a> · MIT</sub>
 </div>
