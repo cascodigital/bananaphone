@@ -6,6 +6,8 @@
 
 You grunt case notes into a microphone in whatever language your brain runs on — Portuguese, Spanish or English — and BananaPhone hands back clean, professional text in the language your tickets demand, already on your clipboard. Evolution, but for paperwork.
 
+**Speak a language you don't have?** It translates. **Speak one you're still learning?** It polishes what you said *and tells you what you got wrong* — one correction at a time, in your own language.
+
 Built for IT support: turn spoken case notes into ticket-ready Jira documentation in one click — and keep every word on your own machine if you want to. No banana is sent to the cloud without your consent.
 
 ![Status](https://img.shields.io/badge/Status-3.0.0-16A34A?style=flat-square)
@@ -26,6 +28,17 @@ Built for IT support: turn spoken case notes into ticket-ready Jira documentatio
 Working tickets in a second language means living in three windows at once: a translator, a text editor, and the ticket system. You dictate or type in your head-language, paste it into a translator, clean it up, then move it into the ticket. Every. Single. Note. That's not knowledge work — that's a primate moving text between trees.
 
 BananaPhone collapses that loop into one hotkey. Talk in your language; polished text lands wherever your cursor is. In **Jira Mode** it goes further — dictate rough notes during the call, then generate a customer-facing reply *and* an internal worklog from all of them at once. You handle the monkey business; it handles the sense-making.
+
+### And the other half of the problem
+
+Plenty of us *do* work in the second language — badly, at speed, all day. You write the ticket
+in English yourself, it comes out clumsy, and nobody ever tells you why. Colleagues are too
+polite to correct a co-worker's grammar, so you repeat the same four mistakes for years.
+
+Since **3.0.0**, dictating in a language that is not your first gets you two things at once:
+the sentence you *meant* to write, on your clipboard, and the single most important thing you
+got wrong, explained in your own language — with a count of how often you keep doing it.
+A spellchecker tells you a word is wrong. This tells you which mistake is *yours*.
 
 ---
 
@@ -56,6 +69,12 @@ BananaPhone collapses that loop into one hotkey. Talk in your language; polished
 <img src="docs/screenshots/dictate-coach.png" alt="Dictate with the language coach" width="560">
 
 <em>New in 3.0.0 — dictate in a language you are still learning. The panel gives you the sentence you meant to write; the coach below tells you the one thing to fix, in your own language, and counts how often you keep making it.</em>
+
+<br><br>
+
+<img src="docs/screenshots/settings-coach.png" alt="The 3.0 settings" width="400">
+
+<em>Your first language, how much detail the coach gives you, and whether it runs at all — every part of it is a setting, and the coach can be turned off without losing the polish.</em>
 
 </div>
 
@@ -107,6 +126,44 @@ Same notes, switch the **profile** to *MSP client* or *Internal helpdesk* and th
 
 ---
 
+## The language coach, end to end
+
+Same idea as Jira Mode, pointed at you instead of the ticket. You dictate in the language you
+are learning; you get the sentence you meant, and one correction.
+
+**🗣️ What you actually said — dictated in English by a Portuguese speaker:**
+
+> *"Okay so I woke this morning and the watch never ring. The watch just stopped in my pulse
+> doing nothing. I woke before 7 hours and the clock on my cell phone started to ring about 7:05."*
+
+**📋 On your clipboard — `Raw` (your phrasing, errors fixed):**
+
+> I woke this morning and my watch never rang. The watch just stopped on my wrist and did
+> nothing. I woke up before 7 AM, and the alarm on my cell phone started to ring around 7:05.
+
+**📋 Or `Professional` — one click, no re-dictating:**
+
+> This morning, my watch did not ring. It stopped working on my wrist. I woke up before
+> 7:00 AM, and my cell phone alarm started ringing around 7:05 AM.
+
+**🎓 And in the coach panel, in *your* language:**
+
+```
+"in my pulse" -> "on my wrist"   (Pulso em português é 'wrist' em inglês.)
+False friend  [4x]
+```
+
+Note what it did **not** do: `pulse` is a perfectly good English word, and a watch really does
+measure a pulse — so nothing flagged it as nonsense. It was caught because the app knows a
+Portuguese speaker saying *pulse* almost certainly means **wrist**. That `[4x]` is the point:
+it is the fourth time you have made that class of mistake in your last 30 corrections.
+
+Switch the coach to **Advanced** and you get up to four corrections with a full explanation
+each. **Simple** is the default on purpose — a wall of corrections gets skimmed and then
+ignored, which is worse than one correction that lands.
+
+---
+
 ## 🔒 Privacy is a setting, not a promise
 
 Most dictation tools ship your microphone to someone else's server. BananaPhone lets you decide, per provider — and the main window shows you the truth in real time:
@@ -116,6 +173,44 @@ Most dictation tools ship your microphone to someone else's server. BananaPhone 
 Pick the **Ollama + local Whisper** path and *nothing* leaves the machine: audio is transcribed locally with `faster-whisper`, and translation/Jira text runs on a local LLM. No keys, no cloud, no audit trail. Perfect for ticket content you can't legally send to a third party. Prefer speed and top-tier quality? Switch to OpenAI or Gemini in one dropdown. Your call, every time.
 
 ---
+
+## ✨ New in 3.0
+
+- **Speak the language you are learning** — until 3.0 a same-language dictation (EN → EN)
+  skipped the writing layer entirely and pasted the raw transcript, stumbles included. Only
+  translated routes ever got professional prose. Now every route goes through it.
+- **Output style: `Raw` | `Professional`** — how hard the model may rewrite you, on every
+  route. `Raw` fixes speech-to-text artifacts and outright errors but keeps your sentence
+  structure and bluntness; `Professional` rewrites for the audience it infers.
+- **Restyle what you already said** — flip the style *after* speaking and the panel and
+  clipboard re-render. Each style is generated once per dictation and cached: the first flip
+  costs one call, every flip after that is instant.
+- **Language coach** — one correction per dictation (or four in Advanced), written in your
+  first language, from a closed set of categories so the mistakes can actually be counted.
+  It never touches the clipboard, runs off the work path on its own thread, and is off in
+  Jira Mode.
+- **A counter that can show improvement** — the panel ranks your weaknesses over the last 30
+  corrections, not all time. A lifetime total can only grow, so it could never show you
+  getting better; a category you stop making now drops out of the window.
+- **Your first language is a setting**, detected from the OS on first run. It decides what is
+  never coached and what language the corrections are written in — Portuguese, Spanish or
+  English, learning any of the others.
+- **Jira Mode is untouched** and keeps its 2.6 behaviour exactly.
+
+Full detail, including the seven bugs found while building it and the measured API cost:
+**[RELEASE_NOTES_3.0.0.md](RELEASE_NOTES_3.0.0.md)**.
+
+---
+
+<details>
+<summary><b>Earlier releases (2.0 → 2.6)</b></summary>
+
+<br>
+
+## ✨ New in 2.6
+
+- **Internal notes in prose by default** — the forced section skeleton is gone; an empty
+  section list is now a valid, meaningful choice per profile.
 
 ## ✨ New in 2.5
 
@@ -154,6 +249,8 @@ Pick the **Ollama + local Whisper** path and *nothing* leaves the machine: audio
 - **Real download progress** — the offline-model download (Whisper + Ollama) now shows live MB/% instead of freezing on a blank screen.
 - **Bulletproof local setup** — the app finds, starts and waits for Ollama even right after a fresh install, and pulls the model for you. No more "stuck on starting / model not found."
 - **Built-in updater** — checks GitHub on launch and tells you when a newer build is out.
+
+</details>
 
 ---
 
@@ -198,6 +295,12 @@ Everything lives in the in-app **Settings** panel:
 - **AI provider** — one selector for speech, translation and Jira text: OpenAI, Gemini, Ollama, or a custom OpenAI-compatible URL.
 - **Model & server URL** — per provider, with sane defaults. **Download offline models** fetches local Whisper + the Ollama model in one go.
 - **Silence timeout** — how long to wait before auto-stopping a capture (3s / 4s / 5s / 8s; default 3s).
+- **My first language** — never coached, and the language your corrections are written in.
+  Detected from your OS locale on first run; change it if the guess is wrong.
+- **Coach detail** — `Simple` (one correction, two lines) or `Advanced` (up to four, with a
+  full explanation each). Simple is the default and is also the cheaper of the two.
+- **Polish same-language dictation** — turn it off to get the pre-3.0 behaviour back, where
+  a same-language dictation is pasted exactly as transcribed and never reaches the text model.
 
 No key is required for the Ollama path — the app can install Ollama and pull the model for you straight from Settings.
 
@@ -206,17 +309,25 @@ No key is required for the Ollama path — the app can install Ollama and pull t
 ## How it works
 
 ```
- mic ──► Speech-to-text                      ──► text (input language)
-         OpenAI /audio/transcriptions               │
-         Gemini generateContent (WAV inline)        ▼
-         faster-whisper (100% offline)        Text AI (OpenAI / Gemini / Ollama)
-                                                    │
-                                       ┌────────────┴────────────┐
-                                       ▼                         ▼
-                                    DICTATE                  JIRA MODE
-                                    translated text          customer reply
-                                    → clipboard              + internal note
+ mic ──► Speech-to-text                    ──► raw text (the language you spoke)
+         OpenAI /audio/transcriptions             │
+         Gemini generateContent (WAV)             ▼
+         faster-whisper (100% offline)      Text AI  ── style: Raw | Professional
+                                                  │
+                                 ┌────────────────┴────────────────┐
+                                 ▼                                 ▼
+                              DICTATE                          JIRA MODE
+                       polished / translated text            customer reply
+                              → clipboard                  + internal note
+                                 │
+                                 └──► LANGUAGE COACH  (only if you spoke a
+                                      raw vs polished   language that is not
+                                      → panel only,     your first; never in
+                                      never clipboard   Jira Mode)
 ```
+
+The coach is a second, separate pass that starts **after** your text is already on the
+clipboard. It cannot delay your work and it cannot cost you a dictation if it fails.
 
 ---
 
@@ -233,5 +344,5 @@ BananaPhone is free and MIT-licensed. If it saves you a few tickets' worth of ty
 MIT — see [LICENSE](LICENSE).
 
 <div align="center">
-<sub>Project lineage: BananaPhone v1 → BananaPhone v2 → <b>BananaPhone</b> v2.4. 🍌<br>Internal storage paths remain <code>bananafone</code>-compatible for backward compatibility.</sub>
+<sub>Project lineage: BananaPhone v1 → v2 → <b>v3</b>. 🍌<br>Internal storage paths remain <code>bananafone</code>-compatible for backward compatibility.</sub>
 </div>
