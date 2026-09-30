@@ -1,6 +1,6 @@
 # Future Releases
 
-Status as of v3.0.1.
+Status as of v3.0.2.
 
 ## Open
 
@@ -38,6 +38,20 @@ Status as of v3.0.1.
   decided from that log.
 
 ## Done
+
+### Editable panels were still unreadable, and the page buried 3.0 (v3.0.2) ✅
+- The 3.0.0 contrast fix sat inside the `if not editable` branch of
+  `_build_panel_textbox`, so it only ever reached read-only panels. **Raw Notes** and
+  **Translate** kept the theme default and stayed barely legible on the near-black field.
+  Caught by re-shooting the Jira Mode screenshot, where it is obvious. Every panel is now
+  pinned to an explicit colour.
+- README hero rewritten. The badge said 3.0.1 while the top of the page -- the only part
+  most visitors read -- was unchanged 2.x copy: same three paragraphs, first screenshot
+  below the fold. It is now four lines and leads with the Dictate + coach screenshot, so
+  what is new is the first thing on screen.
+- `jira-mode.png` re-shot on 3.0.1; the old one predates the OUTPUT STYLE control.
+  `settings.png` dropped in favour of `settings-coach.png` -- two settings screenshots
+  disagreeing with each other is worse than one.
 
 ### None of the 3.0.0 settings persisted (v3.0.1) ✅
 - `write_settings()` saved `polish_same_language`, `output_style`, `english_coach`,

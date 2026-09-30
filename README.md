@@ -2,15 +2,13 @@
 
 # 🍌 BananaPhone
 
-**Primate talks. I make sense.**
+### Primate talks. I make sense. Now I teach.
 
-You grunt case notes into a microphone in whatever language your brain runs on — Portuguese, Spanish or English — and BananaPhone hands back clean, professional text in the language your tickets demand, already on your clipboard. Evolution, but for paperwork.
+**Speak. Clean professional text lands on your clipboard — and you find out what you got wrong.**
 
-**Speak a language you don't have?** It translates. **Speak one you're still learning?** It polishes what you said *and tells you what you got wrong* — one correction at a time, in your own language.
+Portuguese, Spanish or English in. Any of the three out. Cloud, or 100% offline.
 
-Built for IT support: turn spoken case notes into ticket-ready Jira documentation in one click — and keep every word on your own machine if you want to. No banana is sent to the cloud without your consent.
-
-![Status](https://img.shields.io/badge/Status-3.0.1-16A34A?style=flat-square)
+![Status](https://img.shields.io/badge/Status-3.0.2-16A34A?style=flat-square)
 ![License](https://img.shields.io/badge/License-MIT-2563EB?style=flat-square)
 ![Casco Digital](https://img.shields.io/badge/Casco-Digital-111827?style=flat-square)
 ![Platforms](https://img.shields.io/badge/Windows%20%7C%20Linux-supported-success?style=flat-square)
@@ -18,6 +16,12 @@ Built for IT support: turn spoken case notes into ticket-ready Jira documentatio
 ![OpenAI](https://img.shields.io/badge/OpenAI-cloud-412991?style=flat-square&logo=openai&logoColor=white)
 ![Gemini](https://img.shields.io/badge/Gemini-cloud-8E75B2?style=flat-square&logo=googlegemini&logoColor=white)
 ![Ollama](https://img.shields.io/badge/Ollama-100%25%20offline-000000?style=flat-square&logo=ollama&logoColor=white)
+
+<br>
+
+<img src="docs/screenshots/dictate-coach.png" alt="BananaPhone dictating in English with the language coach" width="680">
+
+<em>You spoke English. The panel holds the sentence you <b>meant</b>. Below it, the one thing you got wrong — in your own language, with how often you keep doing it.</em>
 
 </div>
 
@@ -44,16 +48,10 @@ A spellchecker tells you a word is wrong. This tells you which mistake is *yours
 
 ## See it
 
-**Two jobs, one window.** Speak a language you don't have and it translates. Speak one you
-are still learning and it fixes what you said — then tells you what you got wrong.
+**Two jobs, one window.** The dictation panel above is half of it. The other half is Jira Mode:
+rough notes during a call become a customer reply and an internal worklog in one click.
 
 <div align="center">
-
-<img src="docs/screenshots/dictate-coach.png" alt="Dictate with the language coach" width="620">
-
-<em><b>Dictate.</b> You spoke English; the panel holds the sentence you <em>meant</em>. <b>OUTPUT STYLE</b> decides how hard it may rewrite you — flip it after the fact and the text re-renders without speaking again. Below, the coach: one correction, in your own language, and how often you keep making it.</em>
-
-<br><br>
 
 <img src="docs/screenshots/jira-mode.png" alt="Jira Mode workspace" width="620">
 
