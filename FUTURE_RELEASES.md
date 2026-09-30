@@ -1,6 +1,6 @@
 # Future Releases
 
-Status as of v3.0.0.
+Status as of v3.0.1.
 
 ## Open
 
@@ -38,6 +38,21 @@ Status as of v3.0.0.
   decided from that log.
 
 ## Done
+
+### None of the 3.0.0 settings persisted (v3.0.1) ✅
+- `write_settings()` saved `polish_same_language`, `output_style`, `english_coach`,
+  `native_language` and `coach_mode` faithfully. `load_settings()` never read any of
+  them back: it returns an explicit whitelist dict, and a key missing from it does not
+  persist no matter how correctly it was written. Every 3.0.0 setting silently reverted
+  to its default on the next launch -- which is what made "My first language" keep
+  falling back to the OS locale and turning the coach off for English.
+- `default_regenerate_style` had the same defect and had never persisted either; it is
+  fixed in the same pass.
+- The five keys are now validated on load (unknown value falls back to the default).
+  `native_language` deliberately loads as empty when unknown, so OS detection only runs
+  on a genuine first run instead of overriding a saved choice.
+- Guard added to the test suite: every key `write_settings()` emits must appear in what
+  `load_settings()` returns. 26 written, 0 unread.
 
 ### Coach: Simple mode, rolling window, and two panel bugs (v3.0.0, fourth pass) ✅
 - **Coach detail: Simple (default) | Advanced.** Simple returns exactly one

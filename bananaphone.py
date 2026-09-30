@@ -35,7 +35,7 @@ except Exception:
     pynput_keyboard = None
 
 APP_NAME = "BananaPhone"
-APP_VERSION = "3.0.0"
+APP_VERSION = "3.0.1"
 APP_TITLE = f"{APP_NAME} {APP_VERSION}"
 
 # --- Self-update (GitHub Releases) -----------------------------------------
@@ -2260,7 +2260,31 @@ class DictationApp:
         if not isinstance(jira_profiles, list):
             jira_profiles = []
         active_jira_profile = str(settings.get("active_jira_profile", "") or "").strip()
+        # 3.0.0 shipped five settings that write_settings() saved and this
+        # function never read back, so every one of them silently reverted to its
+        # default on the next launch. This dict is an explicit whitelist: a key
+        # missing here does not persist, however faithfully it is written.
+        output_style = str(settings.get("output_style", "") or "").strip()
+        if output_style not in OUTPUT_STYLES:
+            output_style = DEFAULT_OUTPUT_STYLE
+        coach_mode = str(settings.get("coach_mode", "") or "").strip()
+        if coach_mode not in COACH_MODES:
+            coach_mode = DEFAULT_COACH_MODE
+        # Left empty when unknown on purpose: the caller falls back to detecting
+        # it from the OS locale, which must only happen on a genuine first run.
+        native_language = str(settings.get("native_language", "") or "").strip()
+        if native_language not in LANGUAGES:
+            native_language = ""
+        regenerate_style = str(settings.get("default_regenerate_style", "") or "").strip()
+        if regenerate_style not in REGENERATE_CHOICES:
+            regenerate_style = "Standard (Default)"
         return {
+            "polish_same_language": bool(settings.get("polish_same_language", True)),
+            "english_coach": bool(settings.get("english_coach", True)),
+            "output_style": output_style,
+            "coach_mode": coach_mode,
+            "native_language": native_language,
+            "default_regenerate_style": regenerate_style,
             "default_mode": default_mode,
             "default_input_language": default_input_language,
             "default_output": default_output,
