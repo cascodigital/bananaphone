@@ -1,8 +1,12 @@
-# BananaPhone 3.0.0 — Speak the language you are learning
+# 🍌 BananaPhone 3.0.0 — Primate talks. I make sense. Now I teach.
 
-Until now BananaPhone was a translator: it made you sound professional in a language
-you do **not** speak. 3.0.0 adds the other half — it makes you sound professional in a
-language you **do** speak, and tells you what you got wrong.
+Two years I have been cleaning up your grunting and handing it back as English, and not
+once did you ask *why* it needed cleaning. Fine. From now on I show my work.
+
+Until now BananaPhone was a translator: it made you sound professional in a language you
+do **not** speak. 3.0.0 adds the other half — it makes you sound professional in a
+language you **do** speak, and then tells you, patiently, which four mistakes you have
+been making since the day you installed it.
 
 <div align="center">
 <img src="docs/screenshots/dictate-coach.png" alt="Dictate with the language coach" width="620">
