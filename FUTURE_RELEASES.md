@@ -1,6 +1,6 @@
 # Future Releases
 
-Status as of v2.5.1.
+Status as of v3.0.0.
 
 ## Open
 
@@ -38,6 +38,99 @@ Status as of v2.5.1.
   decided from that log.
 
 ## Done
+
+### Coach: Simple mode, rolling window, and two panel bugs (v3.0.0, fourth pass) ✅
+- **Coach detail: Simple (default) | Advanced.** Simple returns exactly one
+  correction rendered in two lines. A wall of corrections gets skimmed and then
+  ignored, which is worse than one that lands -- so Simple is the default, not a
+  hidden option. It is also 56% cheaper than Advanced (65 vs 207 output tokens),
+  taking the whole feature's overhead from +118% to +72% over transcription alone.
+- Nothing shown is lost: every tip is appended to `history` in the coach profile
+  (last 200, timestamped), regardless of how many the panel displays.
+- Short notes are trimmed on a word boundary. A note cut mid-word ("...batimento
+  cardiaco; 'wrist')") reads as a bug.
+- **The panel counter is now a rolling window of the last 30 corrections**, not a
+  lifetime total. A total that can only grow can never show him improving:
+  measured, a category he stopped making drops out of the window entirely while
+  the lifetime count stays in the file as the permanent record.
+- **Bug: a stale "coach off" message survived activation.** Switching INPUT from
+  Portuguese to English swapped the title but left the old body text, so the panel
+  kept insisting INPUT was Brazilian Portuguese. The body now tracks whether it
+  holds a reason or live tips, so a stale reason is cleared while tips he is
+  reading are never wiped by a repaint.
+
+### Restyle the last dictation without speaking again (v3.0.0, third pass) ✅
+- Flipping Raw <-> Professional now re-renders what he already said, panel and
+  clipboard. Each style is generated once per dictation and cached: the first
+  flip costs one call, every flip after that is instant (measured 0.9s vs 0.2s).
+- The cache is dropped when the route changes, so a dictation is never restyled
+  with the wrong pair of languages.
+- A flip landing while another is in flight resolves to the newer selection.
+- **Jira Mode is deliberately untouched.** `active_output_style()` pins it to the
+  pre-3.0 behaviour; the selector is Dictate-only and no restyle fires there.
+
+### Output style + coach on every spoken route (v3.0.0, second pass) ✅
+- **Output style: Raw | Professional**, a segmented button under the INPUT/OUTPUT
+  selectors. It is the third leg of the same decision (what goes in, what comes
+  out, how hard the model may rewrite it), so it lives with the other two rather
+  than in Settings. `Raw` is not "no processing": artifacts and outright errors
+  are still fixed, but his sentence structure, word order and bluntness survive.
+  The style applies to translated routes too, not just same-language ones.
+- **Coach is now keyed on the INPUT language, not on source == target.** The old
+  gate silently excluded EN -> PT, where the English is still his own and still
+  worth correcting. PT -> EN and PT -> PT stay off: there the English is the
+  model's and his Portuguese is native. Coach no longer depends on the polish
+  setting either.
+- On a translated route there is no same-language polished text to diff against,
+  so `coach_review` now runs from the raw dictation alone. Same tips, same
+  categories, one less input.
+- **Bug caught in testing, not in production:** given a short dictation, the
+  Professional prompt turned "stopped in my pulse" into "stopped monitoring my
+  pulse" -- a fact he never said -- and Raw deleted the clause instead. Both
+  prompts now carry an explicit Portuguese false-friend table (pulse=wrist,
+  actually=currently, pretend=intend, ...) plus a hard "never drop a clause you
+  cannot resolve" rule. The false friend has to be read with the meaning he
+  intended even when the English reading would make sense on its own.
+- Changing style is refused mid-recording and the widget snaps back, so it can
+  never display a state the app is not in.
+
+### Same-language polish + Language coach (v3.0.0) ✅
+- **The bug that defined the release.** `transform_output_text` opened with an
+  unconditional `if source_language == target_language: return text`. Dictating
+  EN -> EN therefore skipped the writing layer entirely and pasted the raw
+  transcript, stumbles included. Only the translated routes (PT -> EN) ever got
+  professional prose. Now gated behind `polish_same_language` (default on).
+- `polish_same_language_text` is a separate prompt from `transform_output_text`:
+  there is no translation step to hide behind, so it states plainly that the
+  speaker is a fluent non-native, and it is told to keep his voice and his
+  directness instead of inflating the text into corporate filler.
+- **Language coach.** After a polished same-language dictation, a second pass
+  diffs RAW against POLISHED and returns at most 4 corrections. The polished
+  text alone teaches nothing; the delta is the entire lesson.
+  - Closed category set (`misheard`, `false_friend`, `tense`, `phrasal_verb`,
+    `preposition`, `word_order`, `word_choice`, `register`). Free-form tips
+    cannot be counted, and a tip you cannot count cannot tell you what you keep
+    getting wrong. The prompt is explicit that the most specific category wins,
+    otherwise everything collapses into `word_choice` (measured).
+  - `misheard` is the honest stand-in for pronunciation. No text pipeline hears
+    you, but when the recognizer turns your word into a different real word,
+    that is the machine failing to understand you.
+  - Notes are written in Portuguese, his first language, so the rule lands.
+  - Running tally in `~/.config/bananafone/coach_profile.json` drives a
+    "Your #1 so far: X (12x)" header. One tip is noise; the same tip for the
+    12th time is a curriculum.
+- **Hard rules, each covered by a test:**
+  - The coach never touches the clipboard. Work output stays paste-ready.
+  - The coach runs on its own thread, started only after the clipboard is
+    already loaded, and a coach failure never costs him the dictation.
+  - Coach is off for translated routes (PT -> EN English is the model's, not
+    his), off in Jira Mode, and off when the target is his native language.
+  - A malformed model reply degrades to "no tips", never to a crash.
+- The route status line now admits `Polish`/`Polish + Coach`, because on a
+  same-language route his text now leaves the machine where it used to stay.
+- Layout: the coach strip packs BEFORE either tabview. The Tk packer hands the
+  whole cavity to the first widget that asks to expand, so packing it after
+  collapsed it to zero height.
 
 ### Fix Wayland input grab / stuck modifiers on Linux (v2.5.1) ✅
 - On Linux running Wayland (Zorin OS / GNOME Wayland), `pynput` hooked into XWayland

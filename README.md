@@ -8,7 +8,7 @@ You grunt case notes into a microphone in whatever language your brain runs on �
 
 Built for IT support: turn spoken case notes into ticket-ready Jira documentation in one click — and keep every word on your own machine if you want to. No banana is sent to the cloud without your consent.
 
-![Status](https://img.shields.io/badge/Status-2.5.1-16A34A?style=flat-square)
+![Status](https://img.shields.io/badge/Status-3.0.0-16A34A?style=flat-square)
 ![License](https://img.shields.io/badge/License-MIT-2563EB?style=flat-square)
 ![Casco Digital](https://img.shields.io/badge/Casco-Digital-111827?style=flat-square)
 ![Platforms](https://img.shields.io/badge/Windows%20%7C%20Linux-supported-success?style=flat-square)
@@ -51,12 +51,24 @@ BananaPhone collapses that loop into one hotkey. Talk in your language; polished
 
 <em>One provider selector drives speech, translation and Jira — cloud or fully local — with a live readout of whether audio or ticket text ever leaves the machine.</em>
 
+<br><br>
+
+<img src="docs/screenshots/dictate-coach.png" alt="Dictate with the language coach" width="560">
+
+<em>New in 3.0.0 — dictate in a language you are still learning. The panel gives you the sentence you meant to write; the coach below tells you the one thing to fix, in your own language, and counts how often you keep making it.</em>
+
 </div>
 
 ---
 
 ## What it does
 
+- 🗣️ **Speak a language you are still learning** — dictate in English (or Spanish) and get
+  back the sentence you meant to write, in **Raw** (your phrasing, errors fixed) or
+  **Professional** (rewritten for the audience). Flip between them after the fact without
+  speaking again. See [RELEASE_NOTES_3.0.0.md](RELEASE_NOTES_3.0.0.md).
+- 🎓 **Language coach** — one correction per dictation, written in your first language,
+  with a rolling count of the mistakes you actually repeat. Never touches the clipboard.
 - 🎙️ **Press-to-talk dictation** — hold the button (or the global hotkey `Ctrl+Shift+D`), speak, and it auto-stops on silence. The result is on your clipboard before you reach for it.
 - 🌍 **Language routing** — speak Portuguese, Spanish or English; output in any of the three. Brazilian-Portuguese tuned.
 - 📋 **Paste & translate** — the **Translate** tab handles text you already have instead of dictating it: paste, `Ctrl+Enter`, and the translation is on your clipboard with its formatting intact.

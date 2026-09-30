@@ -35,7 +35,7 @@ except Exception:
     pynput_keyboard = None
 
 APP_NAME = "BananaPhone"
-APP_VERSION = "2.6.0"
+APP_VERSION = "3.0.0"
 APP_TITLE = f"{APP_NAME} {APP_VERSION}"
 
 # --- Self-update (GitHub Releases) -----------------------------------------
@@ -123,6 +123,10 @@ CONFIG_DIR = os.path.expanduser("~/.config/bananafone")
 SETTINGS_FILE = os.path.join(CONFIG_DIR, "settings_v2.json")
 JIRA_HISTORY_FILE = os.path.join(CONFIG_DIR, "jira_history.json")
 COMMAND_FILE = os.path.join(CONFIG_DIR, "command.json")
+# Coach profile: the running tally of which mistakes he actually repeats. This is
+# the point of the feature — a single tip is noise, the same tip for the 12th time
+# is a curriculum.
+COACH_PROFILE_FILE = os.path.join(CONFIG_DIR, "coach_profile.json")
 HF_CACHE_DIR = os.path.expanduser("~/.cache/huggingface/hub")
 DEFAULT_OPENAI_MODEL = os.environ.get("BANANAFONE_OPENAI_MODEL", "gpt-4o-mini-transcribe")
 DEFAULT_OPENAI_TEXT_MODEL = os.environ.get("BANANAFONE_OPENAI_TEXT_MODEL", "gpt-4o-mini")
@@ -177,6 +181,59 @@ NETWORK_RETRY_DELAYS = (0.0, 0.8, 1.8)
 # Only Gemini honors reasoning_effort here — OpenAI's gpt-4o-mini and Ollama would
 # reject it, so it is injected solely when the text provider is "gemini".
 GEMINI_REASONING_TRANSLATE = "none"
+GEMINI_REASONING_COACH = "low"
+
+# Closed set on purpose. Free-form tips cannot be counted, and a tip you cannot
+# count cannot tell you what you keep getting wrong. `misheard` is the honest
+# stand-in for pronunciation: no text pipeline hears you, but when the recognizer
+# turns your word into a different real word, that is the machine failing to
+# understand you -- the same failure a human on a bad line would have.
+COACH_CATEGORIES = {
+    "misheard": "Likely mispronounced",
+    "false_friend": "False friend",
+    "tense": "Verb tense",
+    "phrasal_verb": "Phrasal verb",
+    "preposition": "Preposition / article",
+    "word_order": "Word order",
+    "word_choice": "Word choice",
+    "register": "Register / tone",
+}
+COACH_MAX_TIPS = 4
+# Simple is the default on purpose: a wall of corrections gets skimmed and then
+# ignored, which is worse than one correction that actually lands.
+COACH_MODES = ("Simple", "Advanced")
+DEFAULT_COACH_MODE = "Simple"
+COACH_SIMPLE_NOTE_CHARS = 48
+# What the panel counts. A lifetime total can only ever grow, so it can never
+# show him improving; a rolling window drops the mistakes he has stopped making.
+COACH_WINDOW = 30
+
+
+def trim_words(text, cap):
+    """Cut to `cap` on a word boundary. A note ending mid-word reads as a bug."""
+    text = (text or "").strip()
+    if len(text) <= cap:
+        return text
+    cut = text[:cap].rstrip()
+    space = cut.rfind(" ")
+    if space > cap // 2:
+        cut = cut[:space]
+    return cut.rstrip(" ,;:-") + "\u2026"
+# The user's first language. Coaching it is noise -- a native speaker does not
+# need to be told about his own grammar -- and it is also the language the tips
+# are written in, because a rule lands in your own language. Detected from the
+# OS on first run so the app is useful to anyone, not just to its author.
+def detect_native_language():
+    try:
+        import locale
+        tag = (locale.getlocale()[0] or locale.getdefaultlocale()[0] or "")
+    except Exception:
+        tag = ""
+    tag = tag.lower()
+    for key in ("pt", "es"):
+        if tag.startswith(key):
+            return key
+    return "en"
 GEMINI_REASONING_JIRA = "low"
 
 TEXT_PROVIDERS = {
@@ -427,6 +484,27 @@ REGENERATE_CHOICES = {
     "KB Article Draft": "Format the internal note as a generic Knowledge Base (KB) article draft. Abstract the specific user details and provide a clear step-by-step guide on how to solve this issue if it happens again.",
 }
 
+# Same shape as REGENERATE_CHOICES: label -> prompt fragment. "Raw" is not
+# "no processing" -- speech-to-text artifacts still get repaired. It means the
+# rewrite stops at correctness and never touches his phrasing.
+OUTPUT_STYLES = {
+    "Raw": (
+        "STYLE: faithful. Fix only what is objectively wrong: speech-to-text artifacts, "
+        "grammar, verb tenses, articles, prepositions, and words that are plainly the wrong "
+        "word. Keep HIS sentence structure, HIS word order, HIS vocabulary and HIS bluntness. "
+        "Do not merge or split his sentences, do not reorder his points, do not add connectives "
+        "or transitions he did not say, do not raise the register. If a sentence is already "
+        "correct, return it untouched."
+    ),
+    "Professional": (
+        "STYLE: polished. Deliver it as a competent professional would write it for the "
+        "audience you infer. Reorganize rambling dictation into coherent sentences and "
+        "paragraphs; reordering for clarity is allowed. Keep it tight -- never longer than the "
+        "thought, never padded with pleasantries he did not say."
+    ),
+}
+DEFAULT_OUTPUT_STYLE = "Professional"
+
 DEFAULT_SILENCE_TIMEOUT = os.environ.get("BANANAPHONE_V2_SILENCE_TIMEOUT", "3")
 SILENCE_TIMEOUT_OPTIONS = ("3", "4", "5", "8")
 MIN_SPEECH_SECONDS = float(os.environ.get("BANANAFONE_MIN_SPEECH_SECONDS", "0.35"))
@@ -577,6 +655,29 @@ class DictationApp:
         self.dictate_jira_trigger_phrases = self.settings.get(
             "dictate_jira_trigger_phrases", DEFAULT_DICTATE_JIRA_TRIGGERS
         )
+        # 3.0.0: same-language dictation used to skip the writing layer entirely.
+        # Both default ON -- they are the point of this release -- and both are
+        # independent: polish is the work tool, coach is the training tool.
+        self.polish_same_language = self.settings.get("polish_same_language", True)
+        self.output_style = self.settings.get("output_style", DEFAULT_OUTPUT_STYLE)
+        if self.output_style not in OUTPUT_STYLES:
+            self.output_style = DEFAULT_OUTPUT_STYLE
+        self.english_coach = self.settings.get("english_coach", True)
+        self.coach_mode = self.settings.get("coach_mode", DEFAULT_COACH_MODE)
+        if self.coach_mode not in COACH_MODES:
+            self.coach_mode = DEFAULT_COACH_MODE
+        self.native_language = self.settings.get("native_language") or detect_native_language()
+        if self.native_language not in LANGUAGES:
+            self.native_language = "en"
+        self.coach_profile = self.load_coach_profile()
+        self.coach_tips = []
+        self.coach_body_is_reason = True
+        # Last Dictate result, so flipping the style re-renders what he already
+        # said instead of making him say it again. Each style is generated once
+        # and then cached: the first flip costs one call, every flip after that
+        # is instant and free.
+        self.last_dictation = None
+        self.style_rerender_busy = False
         self.silence_timeout_setting = self.settings.get("silence_timeout", DEFAULT_SILENCE_TIMEOUT)
         self.configured_api_key = self.settings.get("api_key", "")
         self.configured_gemini_key = self.settings.get("gemini_api_key", "")
@@ -746,6 +847,35 @@ class DictationApp:
             self.route_frame, 1, "OUTPUT", self.output_var,
             tuple(LANGUAGE_CHOICES.keys()), self.on_output_selected, row=1,
         )
+        # Output style sits directly under the two language selectors, because it
+        # is the third leg of the same decision: what goes in, what comes out, and
+        # how hard the model is allowed to rewrite it. Segmented button on purpose
+        # -- same visual language as Dictate/Jira above it, one click, no dropdown
+        # to open, and both options stay readable without being selected.
+        self.style_label = ctk.CTkLabel(
+            self.route_frame,
+            text="OUTPUT STYLE",
+            font=ctk.CTkFont(size=11, weight="bold"),
+            text_color=COLOR_MUTED,
+        )
+        self.style_label.grid(row=2, column=0, columnspan=2, padx=10, pady=(8, 0), sticky="w")
+        self.style_var = tk.StringVar(value=self.output_style)
+        self.style_combo = ctk.CTkSegmentedButton(
+            self.route_frame,
+            values=list(OUTPUT_STYLES.keys()),
+            variable=self.style_var,
+            command=self.on_style_selected,
+            font=ctk.CTkFont(size=12, weight="bold"),
+            height=30,
+            corner_radius=8,
+            fg_color=COLOR_FIELD,
+            selected_color=BTN_PRIMARY,
+            selected_hover_color=BTN_PRIMARY_HOVER,
+            unselected_color=COLOR_FIELD,
+            unselected_hover_color=BTN_NEUTRAL_HOVER,
+        )
+        self.style_combo.grid(row=3, column=0, columnspan=2, padx=10, pady=(2, 12), sticky="ew")
+
         for column in range(2):
             self.route_frame.grid_columnconfigure(column, weight=1)
 
@@ -874,6 +1004,45 @@ class DictationApp:
         self.paste_text = self._build_panel_textbox(self.translate_tab, editable=True)
         self.paste_text.bind("<Control-Return>", self.on_translate_hotkey)
         self.paste_text.bind("<Control-KP_Enter>", self.on_translate_hotkey)
+
+        # Coach panel (right column, bottom) ---------------------------
+        # Packed with side=BOTTOM before either tabview is packed, so the tabs
+        # keep expanding into whatever is left and switching Dictate <-> Jira
+        # never moves it.
+        self.coach_frame = ctk.CTkFrame(self.right_col, fg_color="transparent")
+        coach_header = ctk.CTkFrame(self.coach_frame, fg_color="transparent")
+        coach_header.pack(fill=tk.X, padx=4)
+        self.coach_title_label = ctk.CTkLabel(
+            coach_header,
+            text="Language coach",
+            font=ctk.CTkFont(size=11, weight="bold"),
+            text_color=COLOR_TITLE,
+        )
+        self.coach_title_label.pack(side=tk.LEFT)
+        self.coach_weakness_label = ctk.CTkLabel(
+            coach_header,
+            text="",
+            font=ctk.CTkFont(size=11),
+            text_color=COLOR_SUBTLE,
+        )
+        self.coach_weakness_label.pack(side=tk.RIGHT)
+        self.coach_text = ctk.CTkTextbox(
+            self.coach_frame,
+            height=118,
+            font=ctk.CTkFont(size=12),
+            fg_color=COLOR_FIELD,
+            border_color=COLOR_CARD_BORDER,
+            border_width=1,
+            corner_radius=8,
+            wrap="word",
+        )
+        self.coach_text.pack(fill=tk.X, padx=4, pady=(2, 4))
+        self.coach_text.configure(state="disabled", text_color=COLOR_TITLE)
+        self.refresh_coach_weakness()
+        self.set_coach_text(
+            "Set INPUT and OUTPUT to the same language you are learning (e.g. English "
+            "-> English) and dictate. Corrections show up here, never on the clipboard."
+        )
 
         # Jira controls (left column) ----------------------------------
         self.jira_controls_frame = ctk.CTkFrame(left_col, fg_color="transparent")
@@ -1204,7 +1373,10 @@ class DictationApp:
         )
         textbox.pack(fill=tk.BOTH, expand=True, padx=4, pady=4)
         if not editable:
-            textbox.configure(state="disabled")
+            # These panels are read-only, not inactive. CustomTkinter dims the
+            # text of a disabled widget, which on this near-black field is barely
+            # legible, so the read-only colour is pinned to the normal one.
+            textbox.configure(state="disabled", text_color=COLOR_TITLE)
         return textbox
 
     def set_window_icon(self):
@@ -1742,13 +1914,17 @@ class DictationApp:
         self.update_status(f"Translation error: {error_text}", COLOR_ERROR)
 
     def refresh_output_panel(self):
+        # Order matters: the packer hands the whole cavity to the first widget
+        # that asks to expand, so the fixed-height coach strip has to be placed
+        # BEFORE either tabview or it gets zero height.
+        self.dictate_tabs.pack_forget()
+        self.jira_tabs.pack_forget()
+        self.refresh_coach_visibility()
         if self.jira_mode:
-            self.dictate_tabs.pack_forget()
             self.jira_controls_frame.pack(fill=tk.X, pady=(4, 0))
             self.jira_tabs.pack(fill=tk.BOTH, expand=True, padx=8, pady=8)
         else:
             self.jira_controls_frame.pack_forget()
-            self.jira_tabs.pack_forget()
             self.dictate_tabs.pack(fill=tk.BOTH, expand=True, padx=8, pady=8)
 
     def update_title(self):
@@ -1799,6 +1975,84 @@ class DictationApp:
     def toggle_jira_mode(self):
         self.set_jira_mode(not self.jira_mode)
 
+    def active_output_style(self):
+        """Jira Mode keeps its pre-3.0 behaviour; the selector is Dictate-only."""
+        return "Professional" if self.jira_mode else self.output_style
+
+    def on_style_selected(self, _value=None):
+        self.set_output_style(self.style_var.get())
+
+    def set_output_style(self, style_key):
+        if self.is_recording or self.model_loading or style_key not in OUTPUT_STYLES:
+            # Snap the widget back so it never shows a state the app is not in.
+            if hasattr(self, "style_var"):
+                self.style_var.set(self.output_style)
+            return
+        self.output_style = style_key
+        if hasattr(self, "style_var"):
+            self.style_var.set(style_key)
+        if hasattr(self, "route_label"):
+            self.route_label.configure(text=self.current_route_status())
+        self.write_settings()
+        self.rerender_last_dictation()
+
+    # --- restyling what he already said --------------------------------
+    def rerender_last_dictation(self):
+        """Re-render the previous dictation in the newly selected style.
+
+        Cached styles swap instantly; a style he has not used yet on this
+        dictation costs exactly one call, once.
+        """
+        if self.jira_mode or self.style_rerender_busy:
+            return
+        last = self.last_dictation
+        if not last:
+            return
+        # A stale dictation from a different route would be restyled with the
+        # wrong languages, so it is dropped rather than silently reused.
+        if last["source"] != self.source_language() or last["target"] != self.target_language():
+            self.last_dictation = None
+            return
+        cached = last["outputs"].get(self.output_style)
+        if cached:
+            self.apply_restyled_text(cached, cached=True)
+            return
+        self.style_rerender_busy = True
+        self.update_status(f"Rewriting as {self.output_style}...", COLOR_INFO)
+        threading.Thread(target=self.restyle_worker, args=(last, self.output_style), daemon=True).start()
+
+    def restyle_worker(self, last, style_key):
+        try:
+            output = self.transform_output_text(last["raw"])
+            if not output:
+                raise RuntimeError("Restyle returned empty output")
+        except Exception as exc:
+            self.log_exception("restyle_worker failed")
+            self.root.after(0, self.fail_restyle, str(exc)[:120])
+            return
+        # Guard against a second dictation having landed while this was in flight.
+        if self.last_dictation is last:
+            last["outputs"][style_key] = output
+        self.root.after(0, self.finish_restyle, output, style_key)
+
+    def finish_restyle(self, output, style_key):
+        self.style_rerender_busy = False
+        if style_key != self.output_style:
+            # He flipped again mid-flight; the newer selection wins.
+            self.rerender_last_dictation()
+            return
+        self.apply_restyled_text(output, cached=False)
+
+    def fail_restyle(self, error_text):
+        self.style_rerender_busy = False
+        self.update_status(f"Could not restyle: {error_text}", COLOR_ERROR)
+
+    def apply_restyled_text(self, output, cached):
+        self.set_result_text(output)
+        self.copy_to_clipboard(output)
+        suffix = "instant" if cached else "rewritten"
+        self.update_status(f"{self.output_style} version copied ({suffix}).", COLOR_OK)
+
     def set_input_language(self, language_key, update_status=True):
         if self.is_recording or self.model_loading or language_key not in LANGUAGES:
             return
@@ -1808,6 +2062,7 @@ class DictationApp:
         if update_status:
             self.route_label.configure(text=self.current_route_status())
             self.refresh_privacy_status()
+        self.refresh_output_panel()
         self.refresh_defaults_label()
         self.set_mode_button_states()
 
@@ -1820,6 +2075,7 @@ class DictationApp:
         if update_status:
             self.route_label.configure(text=self.current_route_status())
             self.refresh_privacy_status()
+        self.refresh_output_panel()
         self.refresh_defaults_label()
         self.set_mode_button_states()
 
@@ -1848,8 +2104,17 @@ class DictationApp:
         mode_label = " | JIRA MODE" if self.jira_mode else ""
         timeout = self.silence_timeout_label()
         text_ai = ""
-        if self.jira_mode or self.input_language != self.output_target:
+        # Polish makes the text AI run even on a same-language route, so the
+        # status line has to admit it: this is also what tells him his English
+        # is leaving the machine.
+        polishing = self.polish_same_language and self.input_language == self.output_target
+        if self.jira_mode or self.input_language != self.output_target or polishing:
             text_ai = f" | Text AI: {self.text_provider_short()}"
+        if not self.jira_mode:
+            if polishing or self.input_language != self.output_target:
+                text_ai += f" | Style: {self.output_style}"
+            if self.coach_is_active():
+                text_ai += " | Coach"
         mode_status = self.mode["status"]
         if self.mode.get("backend") == "api":
             provider_label = SPEECH_PROVIDER_LABELS.get(self.api_speech_provider(), "OpenAI")
@@ -2029,6 +2294,11 @@ class DictationApp:
             "dictate_jira_trigger": self.dictate_jira_trigger_enabled,
             "dictate_jira_trigger_phrases": self.dictate_jira_trigger_phrases,
             "silence_timeout": self.silence_timeout_setting,
+            "polish_same_language": self.polish_same_language,
+            "output_style": self.output_style,
+            "english_coach": self.english_coach,
+            "native_language": self.native_language,
+            "coach_mode": self.coach_mode,
             "api_key": self.configured_api_key,
             "gemini_api_key": self.configured_gemini_key,
             "text_provider": self.text_provider,
@@ -2818,6 +3088,70 @@ class DictationApp:
         )
         self.jira_instructions_status_label.pack(side=tk.LEFT, padx=(10, 0))
 
+        native_row = ctk.CTkFrame(body, fg_color="transparent")
+        native_row.pack(fill=tk.X, pady=(0, 4))
+        ctk.CTkLabel(
+            native_row,
+            text="My first language (never coached; tips are written in it)",
+            text_color=COLOR_TITLE,
+            font=ctk.CTkFont(size=12),
+        ).pack(side=tk.LEFT)
+        native_var = tk.StringVar(value=LANGUAGE_LABELS.get(self.native_language, "English"))
+        ctk.CTkOptionMenu(
+            native_row,
+            variable=native_var,
+            values=list(LANGUAGE_CHOICES.keys()),
+            width=140,
+            font=ctk.CTkFont(size=12),
+            fg_color=COLOR_FIELD,
+            button_color=BTN_NEUTRAL,
+            button_hover_color=BTN_NEUTRAL_HOVER,
+            corner_radius=8,
+        ).pack(side=tk.RIGHT)
+
+        coach_mode_row = ctk.CTkFrame(body, fg_color="transparent")
+        coach_mode_row.pack(fill=tk.X, pady=(0, 4))
+        ctk.CTkLabel(
+            coach_mode_row,
+            text="Coach detail (Simple = one correction, a few words)",
+            text_color=COLOR_TITLE,
+            font=ctk.CTkFont(size=12),
+        ).pack(side=tk.LEFT)
+        coach_mode_var = tk.StringVar(value=self.coach_mode)
+        ctk.CTkOptionMenu(
+            coach_mode_row,
+            variable=coach_mode_var,
+            values=list(COACH_MODES),
+            width=140,
+            font=ctk.CTkFont(size=12),
+            fg_color=COLOR_FIELD,
+            button_color=BTN_NEUTRAL,
+            button_hover_color=BTN_NEUTRAL_HOVER,
+            corner_radius=8,
+        ).pack(side=tk.RIGHT)
+
+        polish_var = tk.BooleanVar(value=self.polish_same_language)
+        polish_row = ctk.CTkFrame(body, fg_color="transparent")
+        polish_row.pack(fill=tk.X, pady=(0, 4))
+        ctk.CTkCheckBox(
+            polish_row,
+            text="Polish same-language dictation (EN \u2192 EN rewritten as professional prose)",
+            font=ctk.CTkFont(size=12),
+            text_color=COLOR_TITLE,
+            variable=polish_var,
+        ).pack(side=tk.LEFT)
+
+        coach_var = tk.BooleanVar(value=self.english_coach)
+        coach_row = ctk.CTkFrame(body, fg_color="transparent")
+        coach_row.pack(fill=tk.X, pady=(0, 16))
+        ctk.CTkCheckBox(
+            coach_row,
+            text="Coach: correct the English/Spanish you speak (never touches the clipboard)",
+            font=ctk.CTkFont(size=12),
+            text_color=COLOR_TITLE,
+            variable=coach_var,
+        ).pack(side=tk.LEFT)
+
         auto_generate_var = tk.BooleanVar(value=self.jira_auto_generate)
         auto_generate_row = ctk.CTkFrame(body, fg_color="transparent")
         auto_generate_row.pack(fill=tk.X, pady=(0, 16))
@@ -2825,6 +3159,7 @@ class DictationApp:
             auto_generate_row,
             text="Auto-generate after each dictation (no Generate Jira click)",
             font=ctk.CTkFont(size=12),
+            text_color=COLOR_TITLE,
             variable=auto_generate_var,
         ).pack(side=tk.LEFT)
 
@@ -2835,6 +3170,7 @@ class DictationApp:
             trigger_row,
             text="Dictate: closing phrase sends the transcript straight to Jira",
             font=ctk.CTkFont(size=12),
+            text_color=COLOR_TITLE,
             variable=trigger_var,
         ).pack(side=tk.LEFT)
 
@@ -2859,6 +3195,11 @@ class DictationApp:
 
         def save_settings():
             self.silence_timeout_setting = silence_var.get()
+            self.polish_same_language = polish_var.get()
+            self.english_coach = coach_var.get()
+            self.native_language = LANGUAGE_CHOICES.get(native_var.get(), self.native_language)
+            if coach_mode_var.get() in COACH_MODES:
+                self.coach_mode = coach_mode_var.get()
             self.jira_auto_generate = auto_generate_var.get()
             self.dictate_jira_trigger_enabled = trigger_var.get()
             self.dictate_jira_trigger_phrases = (
@@ -2884,6 +3225,7 @@ class DictationApp:
             self.route_label.configure(text=self.current_route_status())
             self.refresh_privacy_status()
             self.refresh_cache_status()
+            self.refresh_output_panel()
             self.set_hold_button_idle()
             self.update_status("Settings saved.", COLOR_OK)
             dialog.destroy()
@@ -3531,6 +3873,17 @@ class DictationApp:
                 raise RuntimeError("Text conversion returned empty output")
 
             self.copy_to_clipboard(output_text)
+            if not self.jira_mode and not trigger_hit:
+                self.last_dictation = {
+                    "raw": text,
+                    "source": self.source_language(),
+                    "target": self.target_language(),
+                    "outputs": {self.output_style: output_text},
+                }
+            # Coach runs AFTER the clipboard is already loaded, on its own thread.
+            # He dictates tickets at work; the work path must never wait on a
+            # lesson, and a coach failure must never cost him the dictation.
+            self.maybe_start_coach(text, output_text)
             if self.jira_mode:
                 result = {"raw_note": output_text}
             elif trigger_hit:
@@ -3913,7 +4266,12 @@ class DictationApp:
         target_language = self.target_language()
 
         if source_language == target_language:
-            return text
+            # Until 3.0.0 this was an unconditional early return: same language in,
+            # same language out, writing layer never ran. That is what made "EN ->
+            # EN" a raw transcript with every stumble intact.
+            if not self.polish_same_language:
+                return text
+            return self.polish_same_language_text(text, target_language)
 
         source_name = LANGUAGES[source_language]["name"]
         target_name = LANGUAGES[target_language]["name"]
@@ -3926,10 +4284,21 @@ class DictationApp:
             "- Drop meta-commentary aimed at you (e.g. 'rewrite this', 'how do I say'); keep only the message.\n"
             "- Infer the audience and match the tone: empathetic and jargon-free for end users; direct and "
             "technical for peers, escalations, and internal notes.\n"
-            "- Reorganize rambling dictation into coherent sentences and paragraphs; reordering for clarity "
-            "is allowed, changing the facts is not.\n"
-            "- Preserve every name, number, time, hostname, ticket ID, error code, and technical term. "
+            "- Changing the facts is never allowed.\n"
+            f"- His first language is {LANGUAGES[self.native_language]['name']}. When a word is "
+            "a lookalike from it, used with ITS meaning, take the meaning he intended, not the "
+            "English one. Common Portuguese examples: "
+            "with its PORTUGUESE meaning, take the meaning he intended, not the English one: "
+            "pulse=wrist, actually=currently, pretend=intend, assist=attend/watch, "
+            "eventually=occasionally, push=pull, costume=habit, college=high school, "
+            "parents=relatives, notice=news, realize=carry out, support=tolerate. "
+            "This applies even when the English reading would make sense on its own -- a watch "
+            "does measure a pulse, but it sits on a wrist.\n"
+            "- Never DROP a clause because it is confusing. Everything he said has to survive in "
+            "some form. If you genuinely cannot resolve a word, keep his wording rather than "
+            "inventing a meaning or deleting the sentence.\n"            "- Preserve every name, number, time, hostname, ticket ID, error code, and technical term. "
             "NEVER invent details or outcomes that were not dictated.\n"
+            f"- {OUTPUT_STYLES[self.active_output_style()]}\n"
             f"- Output ONLY the final {target_name} text, ready to paste. No preamble, no notes, no quotes."
         )
 
@@ -3940,6 +4309,354 @@ class DictationApp:
             ],
             reasoning_effort=GEMINI_REASONING_TRANSLATE,
         )
+
+    def polish_same_language_text(self, text, target_language):
+        """Rewrite a dictation into professional prose without changing language.
+
+        Deliberately a different prompt from transform_output_text: there is no
+        translation step to hide behind, so the instruction has to be explicit
+        that this is a non-native speaker and that his meaning, not his grammar,
+        is the thing to preserve.
+        """
+        target_name = LANGUAGES[target_language]["name"]
+        system_prompt = (
+            "You are the writing layer for a senior IT support engineer who is a fluent but "
+            f"non-native speaker of {target_name}. He dictates; you deliver the message he meant "
+            f"to send, written in clear, professional {target_name}.\n"
+            "- Fix grammar, verb tenses, articles, prepositions, and non-native word choices. "
+            "Fix speech-to-text artifacts, fillers, false starts, and repeated words.\n"
+            "- If a word is a non-word, or a real word that makes no sense in context, assume the "
+            "recognizer misheard him and use the plausible reading. Never treat it as a name.\n"
+            "- Drop meta-commentary aimed at you ('rewrite this', 'how do I say'); keep the message.\n"
+            "- Changing the facts is never allowed.\n"
+            "- He is a Brazilian Portuguese speaker. When a word is a Portuguese lookalike used "
+            "with its PORTUGUESE meaning, take the meaning he intended, not the English one: "
+            "pulse=wrist, actually=currently, pretend=intend, assist=attend/watch, "
+            "eventually=occasionally, push=pull, costume=habit, college=high school, "
+            "parents=relatives, notice=news, realize=carry out, support=tolerate. "
+            "This applies even when the English reading would make sense on its own -- a watch "
+            "does measure a pulse, but it sits on a wrist.\n"
+            "- Never DROP a clause because it is confusing. Everything he said has to survive in "
+            "some form. If you genuinely cannot resolve a word, keep his wording rather than "
+            "inventing a meaning or deleting the sentence.\n"            "- Keep HIS voice and his level of directness. Do not inflate it into corporate filler.\n"
+            f"- {OUTPUT_STYLES[self.active_output_style()]}\n"
+            "- Preserve every name, number, time, hostname, ticket ID, error code, and technical "
+            "term. NEVER invent details or outcomes that were not dictated.\n"
+            f"- Output ONLY the final {target_name} text, ready to paste. No preamble, no notes, "
+            "no quotes, no commentary on his English."
+        )
+
+        return self.run_text_chat(
+            [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": text},
+            ],
+            reasoning_effort=GEMINI_REASONING_TRANSLATE,
+        )
+
+    # --- English coach ------------------------------------------------
+    def coach_is_active(self):
+        """Coach whatever HE actually spoke, whatever the output is.
+
+        The thing being corrected is the INPUT: his own speech. So the route does
+        not matter, only the language he spoke in. EN -> PT is still his English
+        and is still worth correcting; PT -> EN is not, because there the English
+        is the model's, not his, and his Portuguese is native.
+        """
+        return (
+            self.english_coach
+            and not self.jira_mode
+            and self.source_language() != self.native_language
+        )
+
+    def maybe_start_coach(self, raw_text, polished_text):
+        if not self.coach_is_active():
+            return
+        if not raw_text or not raw_text.strip():
+            return
+        # The polished text is only a useful reference when it is in the same
+        # language he spoke. On a translated route it is a different language, so
+        # the coach works from the raw dictation alone.
+        reference = None
+        if self.source_language() == self.target_language():
+            if raw_text.strip() == (polished_text or "").strip():
+                # Nothing was corrected. Say so instead of spending a call on it.
+                self.root.after(0, self.finish_coach, [], {}, True)
+                return
+            reference = polished_text
+        self.root.after(0, self.start_coach_pending)
+        threading.Thread(
+            target=self.coach_worker,
+            args=(raw_text, reference, self.source_language()),
+            daemon=True,
+        ).start()
+
+    def coach_worker(self, raw_text, polished_text, spoken_language):
+        try:
+            tips = self.coach_review(raw_text, polished_text, spoken_language)
+        except Exception:
+            self.log_exception("coach_review failed")
+            self.root.after(0, self.fail_coach)
+            return
+        repeats = self.record_coach_tips(tips)
+        self.root.after(0, self.finish_coach, tips, repeats, True)
+
+    def coach_review(self, raw_text, polished_text, spoken_language):
+        """Name the lessons in what he actually said.
+
+        Runs on the RAW transcript on purpose. Where a same-language polish is
+        available it is passed as a reference, because the delta between what he
+        said and what had to be fixed is the cleanest lesson there is. On a
+        translated route there is no such reference and the coach reads the raw
+        dictation alone.
+        """
+        target_name = LANGUAGES[spoken_language]["name"]
+        native_name = LANGUAGES[self.native_language]["name"]
+        categories = "\n".join(f"  - {key}: {label}" for key, label in COACH_CATEGORIES.items())
+        simple = self.coach_mode == "Simple"
+        if simple:
+            budget = (
+                "Return EXACTLY ONE correction: the single most important one. Return an empty "
+                "list only if he made no real mistake at all. He will read this in two seconds, "
+                f"so `note` must be at most {COACH_SIMPLE_NOTE_CHARS} characters -- a fragment, "
+                "not a sentence, no final period."
+            )
+        else:
+            budget = (
+                f"Identify at most {COACH_MAX_TIPS} corrections that are worth teaching. Fewer "
+                "is better; return an empty list if he made no real mistakes."
+            )
+        if polished_text:
+            inputs = (
+                "You are given RAW, his dictation exactly as the speech recognizer heard it, "
+                "and POLISHED, the corrected version."
+            )
+        else:
+            inputs = (
+                "You are given RAW, his dictation exactly as the speech recognizer heard it. "
+                "There is no corrected version; work it out yourself."
+            )
+        system_prompt = (
+            f"You are a {target_name} coach for a fluent but non-native speaker "
+            f"({native_name} is his first language). {inputs}\n"
+            f"{budget}\n"
+            "Rules:\n"
+            "- Rank by how much the mistake would hurt a listener. A word that changes meaning "
+            "outranks a missing article. Never pad the list to reach the maximum.\n"
+            "- Ignore pure speech-to-text noise (punctuation, capitalization, filler words like "
+            "'uh', duplicated words) -- he did not make those mistakes, the recognizer did.\n"
+            "- Use category `misheard` ONLY when the recognizer produced a different real word or "
+            "a non-word, which suggests his pronunciation was the problem.\n"
+            "- Pick the most SPECIFIC category, never the generic one. If the wrong word is a "
+            "Portuguese lookalike used with its Portuguese meaning (pulso/pulse, atualmente/"
+            "actually, pretender/pretend, assistir/assist, colar/collar), it is `false_friend`, "
+            "not `word_choice`. If the verb form is wrong for the time being described, it is "
+            "`tense`. If a phrasal verb lost or gained its particle (wake/wake up, look/look at), "
+            "it is `phrasal_verb`. Use `word_choice` only when nothing more specific applies.\n"
+            "- `wrong` must be quoted verbatim from RAW. `right` is the minimal correction.\n"
+            f"- `note` is ONE short sentence, max 90 characters, explaining the rule. Write the "
+            f"note in {native_name}, his first language, so the rule actually lands.\n"
+            "Categories (use the key exactly):\n"
+            f"{categories}\n"
+            'Return ONLY JSON: {"tips": [{"category": "...", "wrong": "...", "right": "...", '
+            '"note": "..."}]}'
+        )
+        payload = {"RAW": raw_text}
+        if polished_text:
+            payload["POLISHED"] = polished_text
+        user_payload = json.dumps(payload, ensure_ascii=False)
+
+        reply = self.run_text_chat(
+            [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_payload},
+            ],
+            json_mode=True,
+            timeout=90,
+            reasoning_effort=GEMINI_REASONING_COACH,
+        )
+        return self.parse_coach_reply(reply)
+
+    def parse_coach_reply(self, reply):
+        """Never let a malformed coach reply take down a finished dictation."""
+        if not reply:
+            return []
+        try:
+            data = self.extract_json_object(reply)
+        except Exception:
+            self.log_exception("coach reply was not valid JSON")
+            return []
+        tips = data.get("tips") if isinstance(data, dict) else None
+        if not isinstance(tips, list):
+            return []
+        clean = []
+        limit = 1 if self.coach_mode == "Simple" else COACH_MAX_TIPS
+        for tip in tips[:limit]:
+            if not isinstance(tip, dict):
+                continue
+            category = str(tip.get("category") or "").strip()
+            if category not in COACH_CATEGORIES:
+                category = "word_choice"
+            wrong = str(tip.get("wrong") or "").strip()
+            right = str(tip.get("right") or "").strip()
+            note = str(tip.get("note") or "").strip()
+            if not wrong and not right:
+                continue
+            cap = COACH_SIMPLE_NOTE_CHARS if self.coach_mode == "Simple" else 160
+            clean.append(
+                {"category": category, "wrong": wrong, "right": right,
+                 "note": trim_words(note, cap)}
+            )
+        return clean
+
+    COACH_IDLE_TEXT = "Dictate and the correction shows up here. Never on the clipboard."
+
+    def set_coach_text(self, text, is_reason=False):
+        # Remembering WHY the body says what it says is what lets a repaint keep
+        # live tips while still clearing a stale "coach off" message.
+        self.coach_body_is_reason = is_reason
+        self.coach_text.configure(state="normal")
+        self.coach_text.delete("1.0", tk.END)
+        self.coach_text.insert("1.0", text)
+        self.coach_text.configure(state="disabled")
+
+    def refresh_coach_weakness(self):
+        weakness = self.coach_top_weakness()
+        if weakness is None:
+            self.coach_weakness_label.configure(text="")
+            return
+        label, total = weakness
+        self.coach_weakness_label.configure(
+            text=f"Last {COACH_WINDOW}: {label} ({total}x)"
+        )
+
+    def coach_inactive_reason(self):
+        """Why the coach has nothing to say, in his words. None means it is on."""
+        if not self.english_coach:
+            return "Coach is off. Turn it on in Settings."
+        spoken = LANGUAGES[self.source_language()]["name"]
+        if self.source_language() == self.native_language:
+            return (
+                f"Coach off: INPUT is {spoken}, which Settings lists as your first "
+                "language. Set INPUT to the language you are learning, or fix "
+                '"My first language" in Settings.'
+            )
+        return None
+
+    def refresh_coach_visibility(self):
+        """In Dictate the panel is always there; when it is off it says why.
+
+        It used to just disappear, which reads exactly like a bug -- and did:
+        a first language detected wrong from the OS locale silenced the coach
+        with no way to tell from the window why.
+        """
+        # The language setters run during __init__, before the widgets exist.
+        if not hasattr(self, "coach_frame"):
+            return
+        if self.jira_mode:
+            self.coach_frame.pack_forget()
+            return
+        self.coach_frame.pack(side=tk.BOTTOM, fill=tk.X, padx=8, pady=(0, 8))
+        reason = self.coach_inactive_reason()
+        if reason:
+            self.coach_title_label.configure(text="Language coach - off")
+            self.coach_weakness_label.configure(text="")
+            self.set_coach_text(reason, is_reason=True)
+        else:
+            self.coach_title_label.configure(text="Language coach")
+            self.refresh_coach_weakness()
+            # Clear a stale "off" message, but never the tips he is reading.
+            if getattr(self, "coach_body_is_reason", True):
+                self.set_coach_text(self.COACH_IDLE_TEXT, is_reason=True)
+
+    def start_coach_pending(self):
+        if self.coach_is_active():
+            self.set_coach_text("Reviewing what you said...")
+
+    def finish_coach(self, tips, repeats, _done=True):
+        self.coach_tips = tips
+        if not tips:
+            self.set_coach_text("Nothing worth correcting in that one. Good.", is_reason=False)
+            self.refresh_coach_weakness()
+            return
+        lines = []
+        for tip in tips:
+            label = COACH_CATEGORIES.get(tip["category"], tip["category"])
+            seen = repeats.get(tip["category"])
+            repeat_mark = f"  [{seen}x]" if seen and seen > 1 else ""
+            arrow = f'"{tip["wrong"]}" -> "{tip["right"]}"' if tip["wrong"] else tip["right"]
+            if self.coach_mode == "Simple":
+                # One line he can read without stopping what he is doing.
+                note = f"   ({tip['note']})" if tip["note"] else ""
+                lines.append(f"{arrow}{note}\n{label}{repeat_mark}")
+            else:
+                lines.append(f"- {label}{repeat_mark}: {arrow}")
+                if tip["note"]:
+                    lines.append(f"    {tip['note']}")
+        self.set_coach_text("\n".join(lines), is_reason=False)
+        self.refresh_coach_weakness()
+
+    def fail_coach(self):
+        # A dead coach must read as a dead coach, never as a clean sheet.
+        self.set_coach_text("Coach unavailable for this one (the dictation is fine).")
+
+    def load_coach_profile(self):
+        try:
+            with open(COACH_PROFILE_FILE, "r", encoding="utf-8") as handle:
+                data = json.load(handle)
+        except FileNotFoundError:
+            data = {}
+        except Exception:
+            self.log_exception("coach profile unreadable; starting a fresh one")
+            data = {}
+        counts = data.get("counts") if isinstance(data, dict) else None
+        history = data.get("history") if isinstance(data, dict) else None
+        return {
+            "counts": counts if isinstance(counts, dict) else {},
+            "sessions": int(data.get("sessions") or 0) if isinstance(data, dict) else 0,
+            "history": history if isinstance(history, list) else [],
+        }
+
+    def record_coach_tips(self, tips):
+        """Tally categories across sessions and return this run's repeat counts."""
+        profile = self.coach_profile
+        profile["sessions"] = profile.get("sessions", 0) + 1
+        history = profile.setdefault("history", [])
+        for tip in tips:
+            category = tip["category"]
+            # Lifetime counts stay in the file as the permanent record; the panel
+            # shows the window instead.
+            profile["counts"][category] = int(profile["counts"].get(category, 0)) + 1
+            # Simple shows one tip; the rest must still be recoverable later.
+            history.append({"at": time.strftime("%Y-%m-%d %H:%M"), **tip})
+        del history[:-200]
+        window = self.coach_window_counts()
+        repeats = {t["category"]: window.get(t["category"], 0) for t in tips}
+        try:
+            with open(COACH_PROFILE_FILE, "w", encoding="utf-8") as handle:
+                json.dump(profile, handle, ensure_ascii=False, indent=2)
+        except Exception:
+            self.log_exception("could not persist coach profile")
+        return repeats
+
+    def coach_window_counts(self):
+        """Category tally over the last COACH_WINDOW corrections, not all time."""
+        history = self.coach_profile.get("history") or []
+        counts = {}
+        for tip in history[-COACH_WINDOW:]:
+            category = tip.get("category")
+            if category:
+                counts[category] = counts.get(category, 0) + 1
+        return counts
+
+    def coach_top_weakness(self):
+        counts = self.coach_window_counts()
+        if not counts:
+            return None
+        category, total = max(counts.items(), key=lambda item: item[1])
+        if total < 3:
+            return None
+        return COACH_CATEGORIES.get(category, category), total
 
     def translate_written_text(self, text):
         """Translate text he already has, instead of a dictation.
