@@ -109,10 +109,10 @@ are learning; you get the sentence you meant, and one correction.
 > *"Okay so I woke this morning and the watch never ring. The watch just stopped in my pulse
 > doing nothing. I woke before 7 hours and the clock on my cell phone started to ring about 7:05."*
 
-**📋 On your clipboard — `Raw` (your phrasing, errors fixed):**
+**📋 On your clipboard — `Raw` (your words, only the stumbles removed):**
 
-> I woke this morning and my watch never rang. The watch just stopped on my wrist and did
-> nothing. I woke up before 7 AM, and the alarm on my cell phone started to ring around 7:05.
+> I woke this morning and the watch never ring. The watch just stopped in my pulse doing
+> nothing. I woke before 7 hours and the clock on my cell phone started to ring about 7:05.
 
 **📋 Or `Professional` — one click, no re-dictating:**
 
@@ -153,8 +153,9 @@ Pick the **Ollama + local Whisper** path and *nothing* leaves the machine: audio
   skipped the writing layer entirely and pasted the raw transcript, stumbles included. Only
   translated routes ever got professional prose. Now every route goes through it.
 - **Output style: `Raw` | `Professional`** — how hard the model may rewrite you, on every
-  route. `Raw` fixes speech-to-text artifacts and outright errors but keeps your sentence
-  structure and bluntness; `Professional` rewrites for the audience it infers.
+  route. `Raw` stays as close to what you said as possible: it removes fillers and stutters,
+  fixes misheard words and swaps words you said in another language, and leaves your grammar
+  alone unless a sentence is unintelligible; `Professional` rewrites for the audience it infers.
 - **Restyle what you already said** — flip the style *after* speaking and the panel and
   clipboard re-render. Each style is generated once per dictation and cached: the first flip
   costs one call, every flip after that is instant.

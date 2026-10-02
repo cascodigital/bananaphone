@@ -35,7 +35,7 @@ except Exception:
     pynput_keyboard = None
 
 APP_NAME = "BananaPhone"
-APP_VERSION = "3.0.2"
+APP_VERSION = "3.0.3"
 APP_TITLE = f"{APP_NAME} {APP_VERSION}"
 
 # --- Self-update (GitHub Releases) -----------------------------------------
@@ -489,12 +489,10 @@ REGENERATE_CHOICES = {
 # rewrite stops at correctness and never touches his phrasing.
 OUTPUT_STYLES = {
     "Raw": (
-        "STYLE: faithful. Fix only what is objectively wrong: speech-to-text artifacts, "
-        "grammar, verb tenses, articles, prepositions, and words that are plainly the wrong "
-        "word. Keep HIS sentence structure, HIS word order, HIS vocabulary and HIS bluntness. "
-        "Do not merge or split his sentences, do not reorder his points, do not add connectives "
-        "or transitions he did not say, do not raise the register. If a sentence is already "
-        "correct, return it untouched."
+        "STYLE: raw. Stay as close to his words as possible. Keep HIS sentence structure, HIS "
+        "word order, HIS vocabulary, HIS grammar and HIS bluntness, even when it is not how a "
+        "native would say it. Do not merge or split his sentences, do not reorder his points, "
+        "do not add connectives or transitions he did not say, do not raise the register."
     ),
     "Professional": (
         "STYLE: polished. Deliver it as a competent professional would write it for the "
@@ -4287,9 +4285,62 @@ class DictationApp:
         text = " ".join(part.get("text", "") for part in parts if part.get("text")).strip()
         return text, None
 
+    def raw_output_text(self, text, source_language, target_language):
+        """Raw style: his words, minimally repaired.
+
+        Not a style fragment appended to the polish prompts: those open with
+        "deliver it in clear, professional English, fix non-native word choices",
+        and that base instruction won over the fragment -- Raw came out already
+        half-polished. Raw gets its own prompt with nothing to compete against.
+        The coach is what teaches the corrections; Raw must not pre-empt it.
+        """
+        source_name = LANGUAGES[source_language]["name"]
+        target_name = LANGUAGES[target_language]["name"]
+        native_name = LANGUAGES[self.native_language]["name"]
+        if source_language == target_language:
+            task = (
+                f"He dictated in {target_name}, which is not his first language ({native_name} is). "
+                f"Return his {target_name} text as close to verbatim as possible."
+            )
+        else:
+            task = (
+                f"He dictated in {source_name}. Translate it into {target_name} as literally as "
+                "the target language allows: same sentences, same order, same words where a "
+                "direct equivalent exists."
+            )
+        system_prompt = (
+            f"You are a minimal-edit transcription cleaner. {task}\n"
+            "Allowed changes, and ONLY these:\n"
+            "- Remove fillers, stutters, false starts and words repeated by accident.\n"
+            "- Fix words the speech recognizer obviously misheard (non-words, or words that make "
+            "no sense in context) to the plausible word he said.\n"
+            f"- When he slipped into another language mid-sentence (usually {native_name}), "
+            f"replace just those words with the plain {target_name} equivalent.\n"
+            "- Fix a grammar slip ONLY if the sentence is unintelligible without it. A sentence "
+            "that is understandable but not native-sounding stays exactly as he said it.\n"
+            "- Punctuation and capitalization.\n"
+            "Everything else stays: his phrasing, his word choices, his structure, his tone. Do "
+            "not rephrase, do not improve, do not summarize, do not drop anything he said, do not "
+            "add anything he did not say. Preserve every name, number, hostname, ticket ID and "
+            "technical term.\n"
+            f"Output ONLY the resulting {target_name} text. No preamble, no notes, no quotes."
+        )
+        return self.run_text_chat(
+            [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": text},
+            ],
+            reasoning_effort=GEMINI_REASONING_TRANSLATE,
+        )
+
     def transform_output_text(self, text):
         source_language = self.source_language()
         target_language = self.target_language()
+
+        if self.active_output_style() == "Raw" and (
+            source_language != target_language or self.polish_same_language
+        ):
+            return self.raw_output_text(text, source_language, target_language)
 
         if source_language == target_language:
             # Until 3.0.0 this was an unconditional early return: same language in,
