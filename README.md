@@ -8,7 +8,7 @@
 
 Portuguese, Spanish or English in. Any of the three out. Cloud, or 100% offline.
 
-![Status](https://img.shields.io/badge/Status-3.0.2-16A34A?style=flat-square)
+![Status](https://img.shields.io/badge/Status-3.0.3-16A34A?style=flat-square)
 ![License](https://img.shields.io/badge/License-MIT-2563EB?style=flat-square)
 ![Casco Digital](https://img.shields.io/badge/Casco-Digital-111827?style=flat-square)
 ![Platforms](https://img.shields.io/badge/Windows%20%7C%20Linux-supported-success?style=flat-square)

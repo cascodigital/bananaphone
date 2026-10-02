@@ -3,7 +3,7 @@
 ## Current Product Identity
 
 - Public product name: **BananaPhone**
-- Version line: **2.5.1**
+- Version line: **3.0.3**
 - Tagline: **You speak. It makes sense.**
 - Internal repository / historical codename: `bananaphone`
 - Legacy app kept for reference: `bananafone.py` / `README_V1.md`
@@ -100,6 +100,15 @@ while the app was on 1.9). Keep them in lockstep with `APP_VERSION`.
 - Settings exposes silence timeout, provider selection, API keys, model/server
   settings, and Jira Extra Instructions.
 - Hidden advanced Jira full-prompt override exists for power users.
+- Output style (3.0.0+): `Raw | Professional`, segmented button under the
+  language selectors. Professional is a fragment (`OUTPUT_STYLES`) appended to
+  `transform_output_text` / `polish_same_language_text`. Raw is NOT: since 3.0.3
+  it routes to `raw_output_text`, a separate minimal-edit prompt (fillers,
+  misheard words, words said in another language, punctuation; his grammar
+  stays). Appending Raw to the polish prompts made it come out half-polished,
+  because their base instruction won. Do not fold it back in.
+- Language coach (3.0.0+): keyed on the INPUT language. It is the thing that
+  teaches the corrections, which is why Raw must not pre-empt them.
 - Gemini text calls cap thinking via `reasoning_effort`, injected in
   `run_text_chat` only when the provider is `gemini` (OpenAI/Ollama reject the
   field). Constants `GEMINI_REASONING_TRANSLATE` (`"none"`) and

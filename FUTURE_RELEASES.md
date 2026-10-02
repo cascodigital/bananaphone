@@ -39,6 +39,16 @@ Status as of v3.0.3.
 
 ## Done
 
+### Raw means raw (v3.0.3) ✅
+- Raw was coming out half-polished. The style was a fragment appended to the polish
+  prompts, whose base instruction ("clear, professional English, fix grammar and
+  non-native word choices") won over it. Raw now has its own prompt
+  (`raw_output_text`) with nothing to compete against: fillers, stutters, misheard
+  words, words said in another language, punctuation. His grammar stays unless the
+  sentence is unintelligible -- correcting it is the coach's job, not Raw's.
+- Tested on Gemini 2.5 Flash: "he dont have the permission, entao I give him" ->
+  "he dont have the permission, so I give him"; EN -> PT translates literally.
+
 ### Editable panels were still unreadable, and the page buried 3.0 (v3.0.2) ✅
 - The 3.0.0 contrast fix sat inside the `if not editable` branch of
   `_build_panel_textbox`, so it only ever reached read-only panels. **Raw Notes** and
@@ -97,16 +107,6 @@ Status as of v3.0.3.
 - A flip landing while another is in flight resolves to the newer selection.
 - **Jira Mode is deliberately untouched.** `active_output_style()` pins it to the
   pre-3.0 behaviour; the selector is Dictate-only and no restyle fires there.
-
-### Raw means raw (v3.0.3) ✅
-- Raw was coming out half-polished. The style was a fragment appended to the polish
-  prompts, whose base instruction ("clear, professional English, fix grammar and
-  non-native word choices") won over it. Raw now has its own prompt
-  (`raw_output_text`) with nothing to compete against: fillers, stutters, misheard
-  words, words said in another language, punctuation. His grammar stays unless the
-  sentence is unintelligible -- correcting it is the coach's job, not Raw's.
-- Tested on Gemini 2.5 Flash: "he dont have the permission, entao I give him" ->
-  "he dont have the permission, so I give him"; EN -> PT translates literally.
 
 ### Output style + coach on every spoken route (v3.0.0, second pass) ✅
 - **Output style: Raw | Professional**, a segmented button under the INPUT/OUTPUT
