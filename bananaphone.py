@@ -1545,7 +1545,7 @@ class DictationApp:
     def toggle_panel_edit(self, widget, button):
         """Flip a generated-output box between read-only and editable.
 
-        Lets André tweak a Customer/Internal/Transcript draft in place before
+        Lets the user tweak a Customer/Internal/Transcript draft in place before
         copying it, instead of regenerating or editing the raw notes.
         """
         # CTkTextbox.cget("state") raises in this CustomTkinter version, so the

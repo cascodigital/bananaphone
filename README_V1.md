@@ -1,43 +1,48 @@
-# Bananafone
+# Bananafone (legacy 1.x)
 
-Versao atual do pacote: `1.4`
+> Historical documentation for the 1.x app, kept for reference. The current app is
+> `bananaphone.py`, documented in [README.md](README.md). The `install.sh` in this
+> repository now installs the current app, not this one. The 1.x UI is in Brazilian
+> Portuguese; button labels are quoted below exactly as they appear on screen.
 
-Ditado para Linux com dois modos locais e um modo de API, pensado para ficar
-aberto na tela durante o uso diario.
+Package version: `1.4`
 
-## Visao geral
+Linux dictation with two local modes and one API mode, designed to stay open on
+screen during daily use.
 
-`Bananafone` foi feito para uso diario no desktop:
+## Overview
 
-- `Fast`: menor latencia para texto livre
-- `Normal`: equilibrio entre velocidade e entendimento
-- `API`: transcricao em nuvem para maior precisao em numeros, horario e frases mais chatas
+`Bananafone` was built for daily desktop use:
 
-O app fica residente, grava ao clicar no botao principal, para sozinho depois
-de alguns segundos de silencio e copia o texto para a area de transferencia.
+- `Fast`: lowest latency for free-form text
+- `Normal`: balance between speed and accuracy
+- `API`: cloud transcription for better accuracy on numbers, times and awkward phrases
 
-![Bananafone em modo API](docs/bananafone-api-mode.png)
+The app stays resident, records when the main button is clicked, stops on its
+own after a few seconds of silence, and copies the text to the clipboard.
 
-## Recursos
+![Bananafone in API mode](docs/bananafone-api-mode.png)
 
-- dois modos locais com `faster-whisper` e um modo de nuvem com OpenAI
-- botao grande de clique unico para iniciar a fala
-- parada automatica por silencio
-- atalho `Ctrl+Shift` com a janela focada no esquema segurar/soltar
-- botao `Baixar / Atualizar modelos` para aquecer ou baixar cache local
-- status visual do cache dos modelos `small` e `medium`
-- seletor de fluxo de idioma: `PT -> EN`, `PT -> PT`, `EN -> EN`, `EN -> PT`
-- botao para salvar o modo e a saida atuais como novo padrao
-- log local em `~/.local/state/bananafone/bananafone.log`
+## Features
 
-No Linux, o padrao salvo fica em `~/.config/bananafone/settings.json`.
+- two local modes with `faster-whisper` and one cloud mode with OpenAI
+- large single-click button to start speaking
+- automatic stop on silence
+- `Ctrl+Shift` hold/release shortcut while the window is focused
+- `Baixar / Atualizar modelos` (download / update models) button to warm up or download the local cache
+- visual cache status for the `small` and `medium` models
+- language route selector: `PT -> EN`, `PT -> PT`, `EN -> EN`, `EN -> PT`
+- button to save the current mode and route as the new default
+- local log at `~/.local/state/bananafone/bananafone.log`
 
-## Limitacoes
+On Linux, the saved default lives in `~/.config/bananafone/settings.json`.
 
-- em GNOME Wayland, `Ctrl+Shift` funciona com a janela do `Bananafone` focada
-- hotkey global real exige integracao extra com o compositor ou outro daemon
+## Limitations
 
-## Requisitos
+- on GNOME Wayland, `Ctrl+Shift` only works while the `Bananafone` window is focused
+- a true global hotkey requires extra integration with the compositor or another daemon
+
+## Requirements
 
 ### Python
 
@@ -47,86 +52,67 @@ No Linux, o padrao salvo fica em `~/.config/bananafone/settings.json`.
 - `numpy`
 - `PyAudio`
 
-### Binarios do sistema
+### System binaries
 
 - `ffmpeg`
-- `wl-copy` ou `xclip`
+- `wl-copy` or `xclip`
 - `python3-tk`
 
-### Chave da API
+### API key
 
-O modo `API` usa a API de transcricao da OpenAI. O app procura a chave nesta ordem:
+`API` mode uses the OpenAI transcription API. The app looks for the key in this order:
 
-1. variavel de ambiente `OPENAI_API_KEY`
-2. arquivo configurado em `BANANAFONE_OPENAI_KEY_FILE`
-3. fallback local em `/home/aristofeles/ai/config/ai-keys.md`
+1. the `OPENAI_API_KEY` environment variable
+2. the file set in `BANANAFONE_OPENAI_KEY_FILE`
+3. local fallbacks: `~/ai/config/ai-keys.md`, then `~/.config/bananafone/ai-keys.md`
 
-Para trocar o modelo do modo `API`, use `BANANAFONE_OPENAI_MODEL`.
-O padrao atual e `gpt-4o-mini-transcribe`.
+To change the `API` mode model, set `BANANAFONE_OPENAI_MODEL`.
+The current default is `gpt-4o-mini-transcribe`.
 
-A saida padrao e `PT -> EN`: voce fala em portugues brasileiro e recebe texto
-em ingles. As rotas `PT -> EN` e `EN -> PT` usam tambem um modelo de texto da
-OpenAI para converter o resultado transcrito. Para trocar esse modelo, use
-`BANANAFONE_OPENAI_TEXT_MODEL`. O padrao atual e `gpt-4o-mini`.
+The default route is `PT -> EN`: you speak Brazilian Portuguese and get English
+text. The `PT -> EN` and `EN -> PT` routes also use an OpenAI text model to
+convert the transcription. To change that model, set
+`BANANAFONE_OPENAI_TEXT_MODEL`. The current default is `gpt-4o-mini`.
 
-### Onde colocar a chave
+### Where to put the key
 
-Jeito mais simples:
+Simplest way:
 
-1. abra `/home/aristofeles/ai/config/ai-keys.md`
-2. adicione uma linha como esta:
+1. open `~/.config/bananafone/ai-keys.md`
+2. add a line like this:
 
 ```md
-- **OpenAI (Speech):** `sua-chave-aqui`
+- **OpenAI (Speech):** `your-key-here`
 ```
 
-Alternativas:
+Alternatives:
 
-- exportar `OPENAI_API_KEY` antes de abrir o app
-- apontar `BANANAFONE_OPENAI_KEY_FILE` para outro arquivo seu
+- export `OPENAI_API_KEY` before starting the app
+- point `BANANAFONE_OPENAI_KEY_FILE` at another file
 
-Se existir `OpenAI (Speech)` em `ai-keys.md`, o `Bananafone` usa essa entrada
-automaticamente.
+If an `OpenAI (Speech)` entry exists in `ai-keys.md`, `Bananafone` uses it
+automatically.
 
-## Compatibilidade
+## Compatibility
 
-O `Bananafone` deve funcionar em GNOME ou KDE se a maquina tiver:
+`Bananafone` should work on GNOME or KDE if the machine has:
 
-- Python com `tkinter`
-- microfone funcional via PulseAudio ou PipeWire
-- `wl-copy` no Wayland ou `xclip` no X11 para clipboard
+- Python with `tkinter`
+- a working microphone via PulseAudio or PipeWire
+- `wl-copy` on Wayland or `xclip` on X11 for the clipboard
 
-Em KDE, a chance de funcionar e boa porque o app e Tkinter puro e nao depende
-de nada exclusivo do GNOME.
+On KDE the odds are good, since the app is plain Tkinter and depends on nothing
+GNOME-specific.
 
-Pontos de atencao:
+Things to watch:
 
-- no Wayland, o atalho `Ctrl+Shift` continua dependendo da janela estar focada
-- o launcher do menu depende de `~/.local/share/applications`, que e padrao no KDE tambem
-- se o clipboard falhar, normalmente e falta de `wl-copy` ou `xclip`, nao do app em si
+- on Wayland, the `Ctrl+Shift` shortcut still requires the window to be focused
+- the menu launcher relies on `~/.local/share/applications`, which is standard on KDE too
+- if the clipboard fails, it is usually a missing `wl-copy` or `xclip`, not the app itself
 
-## Instalacao
+## Installation
 
-### Jeito recomendado
-
-Clone o repo e rode o instalador:
-
-```bash
-git clone https://github.com/cascodigital/bananafone.git
-cd bananafone
-./install.sh
-```
-
-O instalador:
-
-- cria `.venv`
-- instala dependencias Python
-- cria launcher em `~/.local/share/applications/bananafone.desktop`
-- deixa o app pronto para abrir pelo menu
-
-### Instalacao manual
-
-Se preferir controlar tudo na mao:
+### Manual installation
 
 ```bash
 python3 -m venv .venv
@@ -136,96 +122,46 @@ pip install -r requirements.txt
 
 ### Windows
 
-O port Windows fica documentado em [`README_WINDOWS.md`](README_WINDOWS.md).
-Resumo:
+The Windows port is documented in [`README_WINDOWS.md`](README_WINDOWS.md).
 
-```powershell
-cd caminho\para\bananafone
-Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
-.\install_windows.ps1
-```
-
-O modo `API` usa `OPENAI_API_KEY` ou um arquivo `ai-keys.md` em
+In 1.x, `API` mode used `OPENAI_API_KEY` or an `ai-keys.md` file at
 `%USERPROFILE%\.config\bananafone\ai-keys.md`.
-O atalho do Windows passa a usar `pythonw.exe` quando disponivel, para abrir o
-app sem console preto fixo.
 
-## Uso rapido
+## Quick use
 
 ```bash
 ./.venv/bin/python bananafone.py
 ```
 
-Fluxo:
+Flow:
 
-1. abra o app
-2. o modo padrao e `API`
-3. o fluxo padrao inicial e `PT -> EN`
-4. escolha `PT -> PT`, `EN -> EN` ou `EN -> PT` se quiser outro fluxo
-5. troque para `Fast`, `Normal` ou `API` conforme a maquina
-6. se quiser que essa combinacao vire o novo padrao, clique em `Tornar atual o padrao`
-7. clique no botao principal para falar
-8. espere parar sozinho no silencio ou clique novamente para encerrar
-9. cole o texto onde quiser
+1. open the app
+2. the default mode is `API`
+3. the initial default route is `PT -> EN`
+4. pick `PT -> PT`, `EN -> EN` or `EN -> PT` for another route
+5. switch to `Fast`, `Normal` or `API` depending on the machine
+6. to make the combination the new default, click `Tornar atual o padrao` (make current the default)
+7. click the main button to speak
+8. wait for it to stop on silence, or click again to finish
+9. paste the text wherever you want
 
-## Atualizacao
+## Desktop entry
 
-Em outra maquina, depois do clone inicial:
+[`desktop/bananafone.desktop`](desktop/bananafone.desktop) is kept as a reference.
 
-```bash
-cd bananafone
-git pull
-./install.sh
-```
+## Development
 
-## Distribuicao
-
-Voce nao precisa de `.deb` para ter um fluxo logico agora.
-
-O caminho mais simples e robusto neste momento e:
-
-- manter o codigo no GitHub
-- instalar por `git clone` + `./install.sh`
-- atualizar por `git pull` + `./install.sh`
-
-Um `.deb` so passa a valer a pena quando voce quiser:
-
-- versao fechada por tag ou release
-- desktop entry, icone e dependencias empacotados juntos
-- instalacao para usuarios que nao querem nem ver terminal
-
-Se quiser, isso pode virar um passo 2 depois. Para o estado atual do projeto,
-Git + instalador e o melhor custo-beneficio.
-
-## Desktop
-
-O arquivo [`desktop/bananafone.desktop`](desktop/bananafone.desktop) fica como
-referencia. O launcher real da maquina e gerado pelo `install.sh`.
-
-## Estrutura
-
-```text
-bananafone/
-  bananafone.py
-  install.sh
-  requirements.txt
-  desktop/
-    bananafone.desktop
-```
-
-## Desenvolvimento
-
-Para validar a sintaxe:
+Syntax check:
 
 ```bash
 python -m py_compile bananafone.py
 ```
 
-## Observacoes
+## Notes
 
-Na primeira execucao dos modos locais, o `faster-whisper` pode baixar o modelo
-e aquecer o cache local. O botao `Baixar / Atualizar modelos` existe justamente
-para isso. O modo `API` nao usa cache local do Whisper; ele envia o audio
-capturado para a API de transcricao configurada. As rotas `PT -> PT` e
-`EN -> EN` copiam a transcricao diretamente. As rotas `PT -> EN` e `EN -> PT`
-passam por conversao OpenAI antes de copiar.
+On the first run of the local modes, `faster-whisper` may download the model and
+warm up the local cache; the `Baixar / Atualizar modelos` button exists for exactly
+that. `API` mode does not use the local Whisper cache; it sends the captured audio
+to the configured transcription API. The `PT -> PT` and `EN -> EN` routes copy the
+transcription directly. The `PT -> EN` and `EN -> PT` routes go through an OpenAI
+conversion before copying.
