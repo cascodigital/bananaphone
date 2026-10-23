@@ -1,32 +1,38 @@
-# bananaphone
+# 🍌 BananaPhone
 
-Desktop dictation app for IT support staff working in a second language: speak Portuguese, Spanish or English, get clean text in any of the three on the clipboard, plus Jira-ready ticket notes and a language coach.
+**Primate talks. I make sense. Now I teach.**
+
+You dictate case notes in the language your brain actually uses — Portuguese, Spanish or English.
+BananaPhone returns clean text for the language your ticket needs, puts it on the clipboard, and
+politely points out the mistakes you keep making. Evolution, but for paperwork.
 
 ![License](https://img.shields.io/badge/license-MIT-blue) ![Python](https://img.shields.io/badge/python-3.10%2B-blue) ![Status](https://img.shields.io/badge/status-active-green)
 
 <img src="docs/screenshots/dictate-coach.png" alt="BananaPhone dictating in English with the language coach" width="680">
 
-## Overview
+## The problem it kills
 
-Writing tickets in a second language usually means juggling a translator, a text editor and the
-ticket system for every note. BananaPhone collapses that into one hotkey: speech is transcribed,
-translated or polished, and placed on the clipboard. Jira Mode turns rough notes dictated during a
-call into a customer-facing reply and an internal worklog in one step. Speech and text processing
-can run in the cloud (OpenAI, Gemini) or fully offline (faster-whisper + Ollama), selected per
-provider in Settings.
+Working tickets in a second language means a translator, a text editor and the ticket system for
+every note. You dictate in your head-language, move text between windows, clean it up, then paste
+it into the ticket. That is not knowledge work; it is a primate moving text between trees.
 
-## Features
+BananaPhone collapses that loop into one hotkey. Talk in your language; clean text lands wherever
+your cursor is. In **Jira Mode**, rough notes from a call become a customer-facing reply and an
+internal worklog in one step. In **Coach** mode, it explains the recurring language mistakes so
+you need the tool a little less tomorrow. Cloud (OpenAI, Gemini) or fully local
+(`faster-whisper` + Ollama): your call, every time.
 
-- Dictate in Portuguese, Spanish or English and copy the result in any of the three, with output style `Raw` (minimal edits) or `Professional` (rewritten for the audience).
-- Restyle an existing dictation after the fact; each style is generated once and cached.
-- Generate a Customer Comment and an Internal Note from dictated notes in Jira Mode, with selectable profiles (tone, length, sections) and one-click regenerate options (shorter, more technical, more customer-friendly, include follow-up).
-- Coach the speaker when dictating in a non-native language: one correction (Simple) or up to four (Advanced), written in the speaker's first language, with a frequency count over the last 30 corrections.
-- Translate pasted text (e-mails, chat messages, tickets) while preserving line breaks, IDs, error codes and commands.
-- Promote a dictation into Jira Mode with a spoken trigger phrase, the **→ JIRA** button or `Ctrl+Shift+J`.
-- Run fully offline with local Whisper (`faster-whisper`, `medium`, CPU int8) and a local Ollama model (`qwen2.5:7b` by default, 14B option); the main window shows live whether audio or ticket text leaves the machine.
-- Check GitHub releases on launch and report when a newer build exists.
+## What it does
 
-## How it works
+- 🎙️ **Dictate and move on** — speak Portuguese, Spanish or English; get clean output in any of the three. `Raw` preserves your words; `Professional` rewrites for the audience.
+- 🎫 **Turn a call into a ticket** — Jira Mode creates a Customer Comment and Internal Note from dictated notes, with profiles and one-click rewrites for shorter, more technical, friendlier, or follow-up versions.
+- 🧠 **Learn while working** — Coach catches one correction in Simple mode or up to four in Advanced mode, in your first language, with a rolling 30-day count. It teaches; it never pollutes your clipboard or Jira note.
+- 🔁 **Fix only what needs fixing** — restyle an existing dictation without dictating again; each style is generated once and cached.
+- 📋 **Translate the ugly stuff safely** — pasted e-mails, chats and tickets retain line breaks, IDs, error codes and commands.
+- 🍌 **Say the magic words** — promote a dictation to Jira Mode with a trigger phrase, the **→ JIRA** button or `Ctrl+Shift+J`.
+- 🔒 **Choose where your words go** — use OpenAI or Gemini, or stay fully offline with local Whisper and Ollama. The window states whether audio or ticket text leaves the machine.
+
+## How the banana earns its keep
 
 ```
  mic --> Speech-to-text                    --> raw text (the language spoken)
@@ -53,7 +59,7 @@ provider in Settings.
 - On the offline path, Jira section structure is enforced deterministically and the Customer Comment is re-derived in a separate jargon-stripping pass so internal tooling does not leak to the end user.
 - On Wayland the in-process `pynput` global hotkey listener is disabled (it caused XWayland modifier locks); the Linux installer registers a GNOME shortcut that calls `~/.local/bin/bananaphone-toggle`, which signals the app through `~/.config/bananafone/command.json`.
 
-The single-file app is `bananaphone.py` (CustomTkinter UI). `bananafone.py` is the legacy 1.x app, kept for reference ([README_V1.md](README_V1.md)).
+The single-file app is `bananaphone.py` (CustomTkinter UI). `bananafone.py` is the legacy 1.x app, kept for reference ([README_V1.md](README_V1.md)). One civilized hotkey; fewer browser tabs for the ape.
 
 ## Requirements
 
@@ -85,7 +91,7 @@ From source on Linux:
    ```bash
    ./.venv/bin/python bananaphone.py
    ```
-4. Press `Ctrl+Shift+D`, speak, and paste the result.
+4. Press `Ctrl+Shift+D`, speak, and paste the result. Congratulations: the microphone now does paperwork.
 
 From source on Windows: double-click `Install-BananaPhone.bat`, or run `.\install_windows.ps1`
 (`-WithOllama` to also install Ollama). The installer picks a PyAudio-compatible Python via winget
@@ -132,15 +138,15 @@ Most settings live in the in-app **Settings** panel and are stored in `~/.config
 
 <img src="docs/screenshots/jira-mode.png" alt="Jira Mode workspace" width="620">
 
-Example: dictated in Portuguese during a call —
+Example: dictated in Portuguese during a call. The primate says this —
 
 > *"cliente reportou que o Outlook está travado em 'Tentando conectar' desde hoje de manhã, verifiquei o painel do Microsoft 365, tudo verde, recriei o perfil do Outlook, limpei as credenciais em cache no Gerenciador de Credenciais e testei pelo Outlook Web, funciona normal por lá, o problema continua só no desktop, pedi pro usuário reiniciar, aguardando confirmação"*
 
-**Customer Comment:**
+BananaPhone gives the customer this —
 
 > We've addressed the issue you reported with Outlook freezing and showing "trying to connect" since this morning. We've performed some troubleshooting steps, and we now ask that you please restart your computer. Once restarted, please let us know if Outlook is working correctly.
 
-**Internal Note:**
+And preserves the useful evidence for the technicians —
 
 > **Issue:** User reported Outlook freezing and showing "trying to connect" since this morning.
 > **Investigation:** Checked the Microsoft 365 health dashboard; all services green. Tested Outlook Web Access (OWA), working normally. The issue appears isolated to the desktop application.
@@ -155,8 +161,16 @@ False friend  [4x]
 ```
 
 The explanation is written in the speaker's first language; `[4x]` is how often that category
-appeared in the last 30 corrections. Release history: [RELEASE_NOTES_3.0.0.md](RELEASE_NOTES_3.0.0.md);
+appeared in the last 30 corrections. The coach arrives after the text is already copied, because
+even a banana knows the ticket comes first. Release history: [RELEASE_NOTES_3.0.0.md](RELEASE_NOTES_3.0.0.md);
 open issues and plans: [FUTURE_RELEASES.md](FUTURE_RELEASES.md).
+
+## Privacy is a setting, not a promise
+
+Most dictation apps send your microphone to someone else's server and leave you to discover that
+in the small print. BananaPhone shows the chosen path in the main window. Select local Whisper and
+Ollama and neither audio nor ticket text leaves the machine; select a cloud provider when speed or
+quality is worth the trade. No banana is sent to the cloud without your consent.
 
 ## Limitations
 
@@ -170,3 +184,5 @@ open issues and plans: [FUTURE_RELEASES.md](FUTURE_RELEASES.md).
 ## License
 
 MIT — see [LICENSE](LICENSE).
+
+<sub>BananaPhone v1 → BananaPhone v2 → a brief identity crisis as SaySense → BananaPhone, back where it belongs. 🍌</sub>
