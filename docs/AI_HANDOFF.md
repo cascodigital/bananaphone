@@ -3,7 +3,7 @@
 ## Current Product Identity
 
 - Public product name: **BananaPhone**
-- Version line: **3.0.3**
+- Version line: **3.0.4**
 - Tagline: **You speak. It makes sense.**
 - Internal repository / historical codename: `bananaphone`
 - Legacy app kept for reference: `bananafone.py` / `README_V1.md`
@@ -109,6 +109,13 @@ while the app was on 1.9). Keep them in lockstep with `APP_VERSION`.
   because their base instruction won. Do not fold it back in.
 - Language coach (3.0.0+): keyed on the INPUT language. It is the thing that
   teaches the corrections, which is why Raw must not pre-empt them.
+- Microphone hold (3.0.4+): every capture must release the device on its own.
+  `capture_audio_loop(session)` never blocks in `read()` (polls
+  `get_read_available()`), stops on no speech / max length / stall
+  (`NO_SPEECH_TIMEOUT_SECONDS`, `MAX_RECORDING_SECONDS`, `MIC_STALL_SECONDS`), and
+  logs `microphone released session=N`. PyAudio streams have no `abort_stream()`;
+  do not add one. Do not reintroduce a blocking read or a loop guarded only by
+  `is_recording`.
 - Gemini text calls cap thinking via `reasoning_effort`, injected in
   `run_text_chat` only when the provider is `gemini` (OpenAI/Ollama reject the
   field). Constants `GEMINI_REASONING_TRANSLATE` (`"none"`) and

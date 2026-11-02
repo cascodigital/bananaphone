@@ -35,7 +35,7 @@ except Exception:
     pynput_keyboard = None
 
 APP_NAME = "BananaPhone"
-APP_VERSION = "3.0.3"
+APP_VERSION = "3.0.4"
 APP_TITLE = f"{APP_NAME} {APP_VERSION}"
 
 # --- Self-update (GitHub Releases) -----------------------------------------
@@ -507,6 +507,16 @@ DEFAULT_SILENCE_TIMEOUT = os.environ.get("BANANAPHONE_V2_SILENCE_TIMEOUT", "3")
 SILENCE_TIMEOUT_OPTIONS = ("3", "4", "5", "8")
 MIN_SPEECH_SECONDS = float(os.environ.get("BANANAFONE_MIN_SPEECH_SECONDS", "0.35"))
 SILENCE_RMS_MULTIPLIER = float(os.environ.get("BANANAFONE_SILENCE_RMS_MULTIPLIER", "1.35"))
+# Microphone hold limits (3.0.4). The silence auto-stop only arms after the
+# first chunk above the threshold, so a recording that never hears speech (a
+# stray hotkey, a muted or wrong mic, a high calibrated floor) used to keep the
+# input device open until the app was killed. These caps make every capture
+# release the mic on its own.
+NO_SPEECH_TIMEOUT_SECONDS = float(os.environ.get("BANANAFONE_NO_SPEECH_SECONDS", "15"))
+MAX_RECORDING_SECONDS = float(os.environ.get("BANANAFONE_MAX_RECORDING_SECONDS", "600"))
+# A device that stops delivering frames (USB/Bluetooth drop, sleep/resume)
+# used to park stream.read() forever with the device still open.
+MIC_STALL_SECONDS = float(os.environ.get("BANANAFONE_MIC_STALL_SECONDS", "3"))
 
 # --- Modern dark palette -------------------------------------------------
 COLOR_WINDOW = "#0F172A"      # slate-950
@@ -720,6 +730,8 @@ class DictationApp:
         self.is_recording = False
         self.stop_requested = False
         self.recording_thread = None
+        self.capture_session = 0
+        self.capture_speech_frames = 0
         self.ctrl_pressed = False
         self.shift_pressed = False
         self.hotkey_recording = False
@@ -1430,11 +1442,31 @@ class DictationApp:
                     pass
                 return
 
+        def modifiers_really_down():
+            # pynput's HotKey keeps its own pressed-key set. A lost key-up (an
+            # elevated window, Win+L, Ctrl+Shift+Esc) leaves Ctrl/Shift "held"
+            # in that set, and then a plain "d" while typing starts a recording
+            # nobody asked for. On Windows, ask the OS for the real key state.
+            if platform.system() != "Windows":
+                return True
+            try:
+                import ctypes
+                user32 = ctypes.windll.user32
+                return bool(user32.GetAsyncKeyState(0x11) & 0x8000) and bool(user32.GetAsyncKeyState(0x10) & 0x8000)
+            except Exception:
+                return True
+
+        def fire_dictation_hotkey():
+            if not modifiers_really_down():
+                self.log_event("ignored Ctrl+Shift+D: modifiers not physically held (stale hotkey state)")
+                return
+            self.root.after(0, self.start_hotkey_recording_command)
+
         try:
             hotkeys = [
                 pynput_keyboard.HotKey(
                     pynput_keyboard.HotKey.parse("<ctrl>+<shift>+d"),
-                    lambda: self.root.after(0, self.start_hotkey_recording_command),
+                    fire_dictation_hotkey,
                 ),
                 pynput_keyboard.HotKey(
                     pynput_keyboard.HotKey.parse("<ctrl>+<shift>+j"),
@@ -3784,7 +3816,17 @@ class DictationApp:
             return
         if self.translating_text:
             return
+        previous = self.recording_thread
+        if previous is not None and previous.is_alive():
+            # The last capture has not released the device yet. Starting a
+            # second one would either fail on the shared source or revive the
+            # old loop, which is how the mic stayed held after a quick re-toggle.
+            self.stop_requested = True
+            self.log_event("start_recording refused: previous capture still closing the microphone")
+            self.update_status("Microphone still closing. Try again in a second.", COLOR_WARN)
+            return
 
+        self.capture_session += 1
         self.audio_chunks = []
         self.is_recording = True
         self.hide_after_hotkey_recording = from_hotkey
@@ -3799,7 +3841,10 @@ class DictationApp:
         else:
             status = f"Recording in {self.mode['label']} mode. Auto-stops after {timeout:.0f}s of silence."
         self.update_status(status, COLOR_OK)
-        self.recording_thread = threading.Thread(target=self.capture_audio_loop, daemon=True)
+        self.log_event(f"recording start session={self.capture_session} hotkey={from_hotkey}")
+        self.recording_thread = threading.Thread(
+            target=self.capture_audio_loop, args=(self.capture_session,), daemon=True
+        )
         self.recording_thread.start()
 
     def stop_recording(self):
@@ -3825,40 +3870,95 @@ class DictationApp:
         except Exception:
             pass
 
-    def capture_audio_loop(self):
+    def capture_audio_loop(self, session=None):
+        if session is None:
+            session = self.capture_session
+        reason = "stopped"
+        opened_at = time.monotonic()
         try:
             with self.source as mic_source:
-                sample_rate = mic_source.SAMPLE_RATE
-                sample_width = mic_source.SAMPLE_WIDTH
-                chunk_size = mic_source.CHUNK
-                self.capture_sample_rate = sample_rate
-                self.capture_sample_width = sample_width
-                silence_deadline = None
-                speech_frames = 0
+                stream = mic_source.stream
+                if stream is None:
+                    # speech_recognition swallows the open() error and hands back
+                    # a source without a stream.
+                    raise RuntimeError("Microphone could not be opened (device busy or missing)")
+                reason = self._capture_frames(session, mic_source, stream.pyaudio_stream, opened_at)
 
-                while self.is_recording and not self.stop_requested:
-                    chunk = mic_source.stream.read(chunk_size)
-                    self.audio_chunks.append(chunk)
-
-                    rms = audioop.rms(chunk, sample_width)
-                    threshold = max(self.energy_floor * SILENCE_RMS_MULTIPLIER, 120)
-
-                    timeout = self.silence_timeout_seconds()
-                    if rms >= threshold:
-                        speech_frames += 1
-                        silence_deadline = time.time() + timeout if timeout is not None else None
-                    elif timeout is not None and speech_frames > 0 and silence_deadline and time.time() >= silence_deadline:
-                        self.root.after(0, self.stop_recording)
-                        return
-
-            min_chunks = max(1, int((sample_rate * MIN_SPEECH_SECONDS) / chunk_size))
-            if speech_frames < min_chunks:
+            min_chunks = max(1, int((self.capture_sample_rate * MIN_SPEECH_SECONDS) / mic_source.CHUNK))
+            if self.capture_speech_frames < min_chunks:
                 self.audio_chunks = []
         except Exception as exc:
+            reason = f"error: {exc}"
             self.log_exception("capture_audio_loop failed")
-            self.root.after(0, self.handle_capture_failure, f"Capture error: {str(exc)[:60]}")
+            if session == self.capture_session:
+                self.root.after(0, self.handle_capture_failure, f"Capture error: {str(exc)[:60]}")
+        finally:
+            self.log_event(
+                f"microphone released session={session} after {time.monotonic() - opened_at:.1f}s ({reason})"
+            )
+
+    def _capture_frames(self, session, mic_source, pa_stream, opened_at):
+        sample_rate = mic_source.SAMPLE_RATE
+        sample_width = mic_source.SAMPLE_WIDTH
+        chunk_size = mic_source.CHUNK
+        self.capture_sample_rate = sample_rate
+        self.capture_sample_width = sample_width
+        self.capture_speech_frames = 0
+        silence_deadline = None
+        last_frame_at = time.monotonic()
+
+        def still_wanted():
+            return session == self.capture_session and self.is_recording and not self.stop_requested
+
+        while still_wanted():
+            now = time.monotonic()
+            if now - opened_at >= MAX_RECORDING_SECONDS:
+                self.root.after(0, self.stop_recording_if_session, session)
+                return f"max length {MAX_RECORDING_SECONDS:.0f}s"
+            if self.capture_speech_frames == 0 and now - opened_at >= NO_SPEECH_TIMEOUT_SECONDS:
+                self.root.after(0, self.stop_recording_if_session, session)
+                return f"no speech in {NO_SPEECH_TIMEOUT_SECONDS:.0f}s"
+
+            # Never block inside read(): poll what the device has delivered so a
+            # stalled device cannot park this thread with the mic still open.
+            try:
+                available = pa_stream.get_read_available()
+            except Exception:
+                available = chunk_size
+            if available < chunk_size:
+                if now - last_frame_at >= MIC_STALL_SECONDS:
+                    raise RuntimeError(f"Microphone stopped delivering audio for {MIC_STALL_SECONDS:.0f}s")
+                time.sleep(0.01)
+                continue
+
+            chunk = pa_stream.read(chunk_size, exception_on_overflow=False)
+            last_frame_at = time.monotonic()
+            if not still_wanted():
+                break
+            self.audio_chunks.append(chunk)
+
+            rms = audioop.rms(chunk, sample_width)
+            threshold = max(self.energy_floor * SILENCE_RMS_MULTIPLIER, 120)
+
+            timeout = self.silence_timeout_seconds()
+            if rms >= threshold:
+                self.capture_speech_frames += 1
+                silence_deadline = time.time() + timeout if timeout is not None else None
+            elif timeout is not None and self.capture_speech_frames > 0 and silence_deadline and time.time() >= silence_deadline:
+                self.root.after(0, self.stop_recording_if_session, session)
+                return "silence"
+        return "stopped"
+
+    def stop_recording_if_session(self, session):
+        if session == self.capture_session:
+            self.stop_recording()
 
     def process_audio(self):
+        capture = self.recording_thread
+        if capture is not None and capture is not threading.current_thread():
+            # Let the capture loop drain and release the device before the
+            # chunk list is read; it no longer blocks, so this returns quickly.
+            capture.join(timeout=MIC_STALL_SECONDS + 2)
         if not self.audio_chunks:
             self.root.after(0, self.after_no_audio)
             return
@@ -5130,6 +5230,13 @@ class DictationApp:
         self.refresh_cache_status()
         self.update_status(f"Download/update failed: {error_text}", COLOR_ERROR)
         self.set_mode_button_states()
+
+    def log_event(self, text):
+        try:
+            with open(LOG_FILE, "a", encoding="utf-8") as log:
+                log.write(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] {text}\n")
+        except Exception:
+            pass
 
     def log_exception(self, context):
         # Workers only surface a truncated str(exc) in the UI; persist the full

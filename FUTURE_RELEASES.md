@@ -1,6 +1,6 @@
 # Future Releases
 
-Status as of v3.0.3.
+Status as of v3.0.4.
 
 ## Open
 
@@ -38,6 +38,26 @@ Status as of v3.0.3.
   decided from that log.
 
 ## Done
+
+### Microphone stayed held after a recording (v3.0.4) ✅
+- Symptom (Linux and Windows, intermittent): after some dictations, other apps could not
+  use the microphone until BananaPhone was closed. Cause not caught in the act; the old
+  build logged nothing about the mic. Every path below kept the device open and was closed:
+  - The silence auto-stop only arms after the first chunk above the threshold. A capture
+    that never heard speech (stray Ctrl+Shift+D, muted/wrong mic, high calibrated floor)
+    ran until the app was killed. Now: release after `BANANAFONE_NO_SPEECH_SECONDS` (15)
+    without speech, and a hard cap `BANANAFONE_MAX_RECORDING_SECONDS` (600).
+  - `stream.read()` blocked forever on a device that stopped delivering frames. The loop
+    now polls `get_read_available()` and fails after `BANANAFONE_MIC_STALL_SECONDS` (3).
+  - A quick stop/start could revive the old capture loop (it only checked `is_recording`).
+    Each capture now has a session id; a new start is refused while the previous thread
+    still owns the device, and transcription waits for the capture thread to exit.
+  - Windows: pynput's HotKey keeps its own key set; a lost Ctrl/Shift key-up made a plain
+    "d" start a recording. The hotkey now checks `GetAsyncKeyState` before firing.
+- Measured on the iLatitude real mic with a stub harness (no GUI): no-speech cap, stop flag,
+  stale session and a simulated stall all left `pactl list source-outputs` empty after exit.
+- The log now records `recording start session=N` and `microphone released session=N after
+  Xs (reason)`. If the lock comes back, a start without a matching release is the evidence.
 
 ### Raw means raw (v3.0.3) ✅
 - Raw was coming out half-polished. The style was a fragment appended to the polish
